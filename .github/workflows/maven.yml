@@ -1,27 +1,63 @@
-name: Java CI
+name: Build Supreme Legacy
 
 on:
   push:
-    branches:
-      - main
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  build-legacy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
-      - name: Set up JDK 16
-        uses: actions/setup-java@v1
-        with:
-          java-version: 16
+      - name: Checkout Supreme Legacy
+        uses: actions/checkout@v5
 
-      - name: Build with Maven
-        run: mvn package
-
-      - name: Upload to Blob Builds
-        uses: WalshyDev/blob-builds/gh-action@main
+      - name: Checkout Slimefun Legacy API
+        uses: actions/checkout@v5
         with:
-          project: Supreme
-          apiToken: ${{ secrets.BLOB_BUILDS_API_TOKEN }}
-          file: ./target/Supreme.jar
-          releaseNotes: ${{ github.event.head_commit.message }}
+          repository: wickidcow/Slimefun-Legacy
+          path: slimefun-legacy
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Publish Slimefun Legacy API locally
+        working-directory: slimefun-legacy
+        run: |
+          chmod +x gradlew
+          ./gradlew publishToMavenLocal -x test -PprojectVersion=Legacy-SNAPSHOT
+
+      - name: Build Supreme against Slimefun Legacy
+        run: mvn -B -Plegacy clean verify
+
+      - name: Upload Supreme jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: Supreme-Legacy
+          path: target/Supreme-Legacy.jar
+          if-no-files-found: error
+
+  compatibility-api:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [official, gugu, united]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Compile against ${{ matrix.profile }} API
+        run: mvn -B -P${{ matrix.profile }} -DskipTests clean package
