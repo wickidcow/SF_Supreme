@@ -80,13 +80,41 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: maven
 
-      - name: Install Slimefun United API locally
+      - name: Build Slimefun United API jar
         working-directory: slimefun-united
         run: |
           chmod +x mvnw
-          ./mvnw -B -DskipTests -Dmaven.javadoc.skip=true install
+          ./mvnw -B -DskipTests -Dmaven.javadoc.skip=true clean package
+
+      - name: Install United jar under isolated CI coordinate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          UNITED_JAR="$(find "$GITHUB_WORKSPACE/slimefun-united/target" \
+            -maxdepth 1 -type f -name '*.jar' \
+            ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name 'original-*' \
+            -print -quit)"
+
+          if [[ -z "$UNITED_JAR" || ! -f "$UNITED_JAR" ]]; then
+            echo "No compiled Slimefun United jar was found." >&2
+            find "$GITHUB_WORKSPACE/slimefun-united/target" -maxdepth 1 -type f -print || true
+            exit 1
+          fi
+
+          echo "Installing United API from: $UNITED_JAR"
+          cd "$RUNNER_TEMP"
+          mvn -B org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
+            -Dfile="$UNITED_JAR" \
+            -DgroupId=io.github.slimefun_united \
+            -DartifactId=slimefun-united \
+            -Dversion=4.10-CI \
+            -Dpackaging=jar \
+            -DgeneratePom=true
+
+          test -f "$HOME/.m2/repository/io/github/slimefun_united/slimefun-united/4.10-CI/slimefun-united-4.10-CI.jar"
+          test -f "$HOME/.m2/repository/io/github/slimefun_united/slimefun-united/4.10-CI/slimefun-united-4.10-CI.pom"
 
       - name: Compile Supreme against Slimefun United
-        run: mvn -B -Punited -DskipTests clean package
+        run: mvn -B -Punited -Dslimefun.version=4.10-CI -DskipTests clean package
