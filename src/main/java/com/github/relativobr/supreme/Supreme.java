@@ -12,7 +12,6 @@ import com.github.relativobr.supreme.util.SupremeOptions;
 import com.github.relativobr.supreme.util.SupremePowerSection;
 import io.github.thebusybiscuit.slimefun4.api.SlimefunAddon;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.config.Config;
-import io.github.thebusybiscuit.slimefun4.libraries.dough.updater.BlobBuildUpdater;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -38,7 +37,7 @@ public class Supreme extends JavaPlugin implements SlimefunAddon {
         supremeOptions = SupremeOptions.defaultValue();
       } else {
         supremeOptions = SupremeOptions.builder()
-                .autoUpdate(typeSection.getBoolean("auto-update", true))
+                .autoUpdate(typeSection.getBoolean("auto-update", false))
                 .useLegacySupremeexpansionItemId(
                     typeSection.getBoolean("use-legacy-supremeexpansion-item-id", false))
                 .lang(typeSection.getString("lang", "en-US"))
@@ -148,10 +147,9 @@ public class Supreme extends JavaPlugin implements SlimefunAddon {
       return;
     }
 
-		var autoUpdate = getSupremeOptions().isAutoUpdate() && getDescription().getVersion().startsWith("Dev");
-		Supreme.inst().log(Level.INFO, "auto-update: " + autoUpdate);
-    if (autoUpdate) {
-      new BlobBuildUpdater(this, getFile(), "Supreme", "Dev").start();
+    if (getSupremeOptions().isAutoUpdate()) {
+      log(Level.WARNING,
+          "The original Supreme auto-updater is disabled in Supreme Legacy. Use your fork's GitHub Actions/releases for updates.");
     }
 
     // localization

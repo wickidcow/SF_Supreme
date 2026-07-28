@@ -26,17 +26,17 @@ public class SetupTechMachines {
         new MobTechCollector(ItemGroups.MACHINES_CATEGORY,
             MobTechCollector.MOB_TECH_COLLECTOR_MACHINE_I, RecipeType.ENHANCED_CRAFTING_TABLE,
             MobTechCollector.RECIPE_MOB_TECH_COLLECTOR_MACHINE_I).setMobRange(3).setCapacity(1000)
-            .setProcessingSpeed(1).setEnergyConsumption(200).register(sup);
+            .setProcessingSpeed(1).setEnergyConsumption(20).register(sup);
 
         new MobTechCollector(ItemGroups.MACHINES_CATEGORY,
             MobTechCollector.MOB_TECH_COLLECTOR_MACHINE_II, RecipeType.ENHANCED_CRAFTING_TABLE,
             MobTechCollector.RECIPE_MOB_TECH_COLLECTOR_MACHINE_II).setMobRange(6).setCapacity(1000)
-            .setProcessingSpeed(1).setEnergyConsumption(200).register(sup);
+            .setProcessingSpeed(1).setEnergyConsumption(20).register(sup);
 
         new MobTechCollector(ItemGroups.MACHINES_CATEGORY,
             MobTechCollector.MOB_TECH_COLLECTOR_MACHINE_III, RecipeType.ENHANCED_CRAFTING_TABLE,
             MobTechCollector.RECIPE_MOB_TECH_COLLECTOR_MACHINE_III).setMobRange(9).setCapacity(1000)
-            .setProcessingSpeed(1).setEnergyConsumption(200).register(sup);
+            .setProcessingSpeed(1).setEnergyConsumption(20).register(sup);
 
       }
 

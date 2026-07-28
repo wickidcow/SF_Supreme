@@ -37,7 +37,7 @@ public class SupremeOptions {
 
     public static SupremeOptions defaultValue() {
         return SupremeOptions.builder()
-                .autoUpdate(true)
+                .autoUpdate(false)
                 .useLegacySupremeexpansionItemId(false)
                 .lang("en-US")
                 .customTickerDelay(2)
