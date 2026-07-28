@@ -80,9 +80,9 @@
         <profile>
             <id>united</id>
             <properties>
-                <slimefun.groupId>com.github.Slimefun-United.Slimefun-United</slimefun.groupId>
+                <slimefun.groupId>io.github.slimefun_united</slimefun.groupId>
                 <slimefun.artifactId>slimefun-united</slimefun.artifactId>
-                <slimefun.version>dev-SNAPSHOT</slimefun.version>
+                <slimefun.version>4.10-SNAPSHOT</slimefun.version>
             </properties>
         </profile>
         <profile>
