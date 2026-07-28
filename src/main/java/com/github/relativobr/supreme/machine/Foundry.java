@@ -35,9 +35,7 @@ import java.util.Objects;
 import javax.annotation.Nonnull;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
-import org.springframework.scheduling.annotation.Async;
 
-@Async
 public class Foundry extends GenericMachine {
 
   public static final SlimefunItemStack FOUNDRY_MACHINE = new SupremeItemStack("SUPREME_FOUNDRY_I", Material.GRINDSTONE,

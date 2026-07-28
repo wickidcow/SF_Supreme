@@ -42,9 +42,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
-import org.springframework.scheduling.annotation.Async;
 
-@Async
 public class CheckInventory extends SlimefunItem implements InventoryBlock {
 
   public static final SlimefunItemStack CHECK_INVENTORY = new SlimefunItemStack("SUPREME_CHECK_INVENTORY",
@@ -111,7 +109,7 @@ public class CheckInventory extends SlimefunItem implements InventoryBlock {
 
       @Override
       public boolean isSynchronized() {
-        return false;
+        return true;
       }
 
     });

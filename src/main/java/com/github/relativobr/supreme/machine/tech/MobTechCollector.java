@@ -22,9 +22,10 @@ import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.inventory.InvUtils;
 import io.github.thebusybiscuit.slimefun4.utils.LoreBuilder;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import javax.annotation.Nonnull;
@@ -43,9 +44,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Zombie;
 import org.bukkit.inventory.ItemStack;
-import org.springframework.scheduling.annotation.Async;
 
-@Async
 public class MobTechCollector extends SimpleItemWithLargeContainerMachine {
 
   public static final SlimefunItemStack MOB_TECH_COLLECTOR_MACHINE_I = new SupremeItemStack(
@@ -80,7 +79,8 @@ public class MobTechCollector extends SimpleItemWithLargeContainerMachine {
       SupremeCetrus.CETRUS_LUMIUM, SupremeComponents.CRYSTALLIZER_MACHINE};
 
 
-  private final Set<MobTechCollectorMachineRecipe> MobTechCollectorMachineRecipes = new HashSet();
+  private final Set<MobTechCollectorMachineRecipe> mobTechCollectorMachineRecipes = new HashSet<>();
+  private final Map<Block, LivingEntity> pendingEntities = new HashMap<>();
   private int mobRange = 4;
 
   @ParametersAreNonnullByDefault
@@ -110,7 +110,7 @@ public class MobTechCollector extends SimpleItemWithLargeContainerMachine {
 
   public void addProduce(@Nonnull MobTechCollectorMachineRecipe produce) {
     Validate.notNull(produce, "A produce cannot be null");
-    this.MobTechCollectorMachineRecipes.add(produce);
+    this.mobTechCollectorMachineRecipes.add(produce);
   }
 
   @Override
@@ -141,46 +141,76 @@ public class MobTechCollector extends SimpleItemWithLargeContainerMachine {
 
   @Override
   protected MachineRecipe findNextRecipe(@Nonnull BlockMenu inv) {
-    int[] inputSlots = this.getInputSlots();
+    for (int slot : getInputSlots()) {
+      ItemStack itemInSlot = inv.getItemInSlot(slot);
+      if (itemInSlot == null || !SlimefunUtils.isItemSimilar(itemInSlot,
+          SupremeComponents.EMPTY_MOBTECH, false, false)) {
+        continue;
+      }
 
-    for (int i = 0; i < inputSlots.length; ++i) {
-      int slot = inputSlots[i];
-      Iterator iterator = this.MobTechCollectorMachineRecipes.iterator();
+      for (MobTechCollectorMachineRecipe produce : mobTechCollectorMachineRecipes) {
+        if (!InvUtils.fits(inv.toInventory(), produce.getOutput()[0], getOutputSlots())) {
+          continue;
+        }
 
-      while (iterator.hasNext()) {
-        MobTechCollectorMachineRecipe produce = (MobTechCollectorMachineRecipe) iterator.next();
-        ItemStack itemInSlot = inv.getItemInSlot(slot);
-        final ItemStack itemInInput = produce.getInput()[0];
-        if (itemInSlot != null && itemInInput != null && SlimefunUtils.isItemSimilar(itemInSlot,
-            SupremeComponents.EMPTY_MOBTECH, false, false) && InvUtils.fits(inv.toInventory(), produce.getOutput()[0],
-            this.getOutputSlots())) {
-          Block invBlock = inv.getBlock();
-          produce.getClass();
-          if (this.isAnimalNearby(invBlock, produce::test)) {
-            inv.consumeItem(slot, 1);
-            return produce;
-          }
+        LivingEntity entity = findAnimalNearby(inv.getBlock(), produce::test);
+        if (entity != null) {
+          // Do not consume here. GenericMachine will reserve the recipe input exactly once.
+          pendingEntities.put(inv.getBlock(), entity);
+          return produce;
         }
       }
     }
-
     return null;
   }
 
   @ParametersAreNonnullByDefault
-  private boolean isAnimalNearby(Block b, Predicate<LivingEntity> predicate) {
-    return !b.getWorld().getNearbyEntities(b.getLocation(), mobRange, mobRange, mobRange, (n) -> {
-      final boolean validAnimal = this.isValidAnimal(n, predicate);
-      if (validAnimal) {
-        n.remove();
+  private LivingEntity findAnimalNearby(Block block, Predicate<LivingEntity> predicate) {
+    for (Entity entity : block.getWorld().getNearbyEntities(
+        block.getLocation(), mobRange, mobRange, mobRange)) {
+      if (entity instanceof LivingEntity living && predicate.test(living)) {
+        return living;
       }
-      return validAnimal;
-    }).isEmpty();
+    }
+    return null;
   }
 
-  @ParametersAreNonnullByDefault
-  private boolean isValidAnimal(Entity n, Predicate<LivingEntity> predicate) {
-    return n instanceof LivingEntity && predicate.test((LivingEntity) n);
+  @Override
+  protected boolean canStartProcess(Block block, BlockMenu menu, MachineRecipe recipe) {
+    LivingEntity entity = pendingEntities.get(block);
+    if (entity == null || !entity.isValid() || entity.isDead()
+        || entity.getWorld() != block.getWorld()) {
+      pendingEntities.remove(block);
+      return false;
+    }
+
+    double dx = Math.abs(entity.getLocation().getX() - block.getX());
+    double dy = Math.abs(entity.getLocation().getY() - block.getY());
+    double dz = Math.abs(entity.getLocation().getZ() - block.getZ());
+    if (dx > mobRange || dy > mobRange || dz > mobRange) {
+      pendingEntities.remove(block);
+      return false;
+    }
+
+    boolean valid = recipe instanceof MobTechCollectorMachineRecipe collectorRecipe
+        && collectorRecipe.test(entity);
+    if (!valid) {
+      pendingEntities.remove(block);
+    }
+    return valid;
+  }
+
+  @Override
+  protected void onProcessStarted(Block block, BlockMenu menu, MachineRecipe recipe) {
+    LivingEntity entity = pendingEntities.remove(block);
+    if (entity != null && entity.isValid() && !entity.isDead()) {
+      entity.remove();
+    }
+  }
+
+  @Override
+  protected void onMachineBreak(Block block) {
+    pendingEntities.remove(block);
   }
 
   @Nonnull

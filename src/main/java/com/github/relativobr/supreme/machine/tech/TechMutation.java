@@ -7,6 +7,7 @@ import com.github.relativobr.supreme.resource.magical.SupremeAttribute;
 import com.github.relativobr.supreme.resource.magical.SupremeCetrus;
 import com.github.relativobr.supreme.resource.magical.SupremeCore;
 import com.github.relativobr.supreme.util.ItemGroups;
+import com.github.relativobr.supreme.util.SupremeInventoryUtils;
 import com.github.relativobr.supreme.util.SupremeItemStack;
 import com.github.relativobr.supreme.util.UtilEnergy;
 import com.github.relativobr.supreme.util.UtilMachine;
@@ -34,7 +35,6 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
-import org.springframework.scheduling.annotation.Async;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -44,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-@Async
 public class TechMutation extends SimpleItemContainerMachine implements Radioactive {
 
   public static final SlimefunItemStack TECH_MUTATION_I = new SupremeItemStack("SUPREME_TECH_MUTATION_I",
@@ -77,8 +76,9 @@ public class TechMutation extends SimpleItemContainerMachine implements Radioact
       TechMutation.TECH_MUTATION_II, SupremeComponents.SUPREME, SupremeComponents.CRYSTALLIZER_MACHINE,
       SupremeCetrus.CETRUS_LUMIUM, SupremeComponents.CRYSTALLIZER_MACHINE};
   public static final List<MobTechMutationGeneric> recipes = new ArrayList<>();
-  private Map<Block, MobTechMutationGeneric> processing = new HashMap<Block, MobTechMutationGeneric>();
-  private Map<Block, Integer> progressTime = new HashMap<Block, Integer>();
+  private final Map<Block, MobTechMutationGeneric> processing = new HashMap<>();
+  private final Map<Block, Integer> progressTime = new HashMap<>();
+  private final Map<Block, Boolean> successfulMutations = new HashMap<>();
   private int speed = 1;
   private int upgradeLuck = 1;
   public TechMutation(SlimefunItemStack item, ItemStack[] recipe) {
@@ -177,51 +177,75 @@ public class TechMutation extends SimpleItemContainerMachine implements Radioact
 
   @Override
   public void tick(Block b) {
-
     BlockMenu inv = BlockStorage.getInventory(b);
-
-    final MobTechMutationGeneric itemRecipe = validRecipeItem(inv);
-    final MobTechMutationGeneric itemProcessing = processing.get(b);
-    if (itemProcessing == null) {
-
-      if (itemRecipe != null) {
-
-        inv.consumeItem(getInputSlots()[0], 1);
-        inv.consumeItem(getInputSlots()[1], 1);
-
-        invalidProgressBar(inv, itemRecipe.getOutput().getType(), " ");
-
-        processing.put(b, itemRecipe);
-        progressTime.put(b, (getTimeProcess() * 2));
-
-      } else {
-
-        invalidProgressBar(inv, "&cTechMutation unidentified recipe");
-
-      }
-
-    } else {
-
-      if (this.getProgressTime(b) <= 0) {
-
-        if (UtilMachine.getRandomInt() <= (itemProcessing.getChance() * getUpgradeLuck())) {
-          inv.pushItem(((ItemStack) itemProcessing.getOutput()).clone(), this.getOutputSlots());
-          invalidProgressBar(inv, Material.BLACK_STAINED_GLASS_PANE, " Success! ");
-        } else {
-          invalidProgressBar(inv, Material.BLACK_STAINED_GLASS_PANE, " Fail! ");
-        }
-
-        processing.put(b, null);
-        progressTime.put(b, 0);
-
-      } else {
-
-        this.processTicks(b, inv, itemProcessing.getOutput());
-
-      }
-
+    if (inv == null) {
+      return;
     }
 
+    MobTechMutationGeneric itemProcessing = processing.get(b);
+    if (itemProcessing == null) {
+      MobTechMutationGeneric itemRecipe = validRecipeItem(inv);
+      if (itemRecipe == null) {
+        invalidProgressBar(inv, "&cTechMutation unidentified recipe");
+        return;
+      }
+
+      ItemStack output = itemRecipe.getOutput().clone();
+      if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), output)) {
+        invalidProgressBar(inv, "&cOutput is full");
+        return;
+      }
+
+      inv.consumeItem(getInputSlots()[0], 1);
+      inv.consumeItem(getInputSlots()[1], 1);
+      invalidProgressBar(inv, output.getType(), " ");
+      processing.put(b, itemRecipe);
+      progressTime.put(b, getTimeProcess() * 2);
+      successfulMutations.remove(b);
+      return;
+    }
+
+    if (getProgressTime(b) <= 0) {
+      boolean success = successfulMutations.computeIfAbsent(b,
+          ignored -> UtilMachine.getRandomInt()
+              <= Math.min(100, itemProcessing.getChance() * getUpgradeLuck()));
+      if (success) {
+        ItemStack output = itemProcessing.getOutput().clone();
+        if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), output)) {
+          invalidProgressBar(inv, "&cOutput is full");
+          return;
+        }
+        SupremeInventoryUtils.pushAll(inv, getOutputSlots(), output);
+        invalidProgressBar(inv, Material.BLACK_STAINED_GLASS_PANE, " Success! ");
+      } else {
+        invalidProgressBar(inv, Material.BLACK_STAINED_GLASS_PANE, " Fail! ");
+      }
+
+      clearState(b);
+      return;
+    }
+
+    processTicks(b, inv, itemProcessing.getOutput());
+  }
+
+  private void clearState(Block block) {
+    processing.remove(block);
+    progressTime.remove(block);
+    successfulMutations.remove(block);
+  }
+
+  @Override
+  protected void onMachineBreak(Block block) {
+    MobTechMutationGeneric recipe = processing.get(block);
+    if (recipe != null && block.getWorld() != null) {
+      ItemStack input1 = recipe.getInput1().clone();
+      ItemStack input2 = recipe.getInput2().clone();
+      input1.setAmount(1);
+      input2.setAmount(1);
+      block.getWorld().dropItemNaturally(block.getLocation(), input1);
+      block.getWorld().dropItemNaturally(block.getLocation(), input2);
+    }
+    clearState(block);
   }
 
   public int getProgressTime(Block b) {
@@ -255,8 +279,11 @@ public class TechMutation extends SimpleItemContainerMachine implements Radioact
   }
 
   private MobTechMutationGeneric validRecipeItem(BlockMenu inv) {
+    if (inv == null) {
+      return null;
+    }
 
-    for (MobTechMutationGeneric produce : this.recipes) {
+    for (MobTechMutationGeneric produce : recipes) {
       ItemStack input1 = produce.getInput1();
       ItemStack input2 = produce.getInput2();
       if (SlimefunUtils.isItemSimilar(inv.getItemInSlot(getInputSlots()[0]), input1, false, false)

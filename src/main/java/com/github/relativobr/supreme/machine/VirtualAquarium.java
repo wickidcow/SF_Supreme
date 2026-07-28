@@ -5,6 +5,7 @@ import com.github.relativobr.supreme.machine.recipe.VirtualAquariumMachineRecipe
 import com.github.relativobr.supreme.resource.SupremeComponents;
 import com.github.relativobr.supreme.resource.magical.SupremeAttribute;
 import com.github.relativobr.supreme.resource.magical.SupremeCetrus;
+import com.github.relativobr.supreme.util.SupremeInventoryUtils;
 import com.github.relativobr.supreme.util.SupremeItemStack;
 import com.github.relativobr.supreme.util.UtilMachine;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
@@ -37,9 +38,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.springframework.scheduling.annotation.Async;
 
-@Async
 public class VirtualAquarium extends SimpleItemWithLargeContainerMachine {
 
   public static final SlimefunItemStack VIRTUAL_AQUARIUM_MACHINE = new SupremeItemStack("SUPREME_VIRTUAL_AQUARIUM_I",
@@ -71,8 +70,9 @@ public class VirtualAquarium extends SimpleItemWithLargeContainerMachine {
       VirtualAquarium.VIRTUAL_AQUARIUM_MACHINE_II, SupremeComponents.SUPREME, SupremeComponents.CRYSTALLIZER_MACHINE,
       SupremeCetrus.CETRUS_LUMIUM, SupremeComponents.CRYSTALLIZER_MACHINE};
 
-  public static Map<Block, MachineRecipe> processing = new HashMap<>();
-  public static Map<Block, Integer> progress = new HashMap<>();
+  private final Map<Block, MachineRecipe> processing = new HashMap<>();
+  private final Map<Block, Integer> progress = new HashMap<>();
+  private final Map<Block, ItemStack> selectedOutput = new HashMap<>();
   private final Set<VirtualAquariumMachineRecipe> virtualAquariumMachineRecipe = new HashSet();
 
   @ParametersAreNonnullByDefault
@@ -136,37 +136,43 @@ public class VirtualAquarium extends SimpleItemWithLargeContainerMachine {
 
   @Override
   protected MachineRecipe findNextRecipe(@Nonnull BlockMenu inv) {
-    int[] inputSlots = this.getInputSlots();
+    for (int slot : getInputSlots()) {
+      ItemStack itemInSlot = inv.getItemInSlot(slot);
+      if (itemInSlot == null || itemInSlot.getType().isAir()) {
+        continue;
+      }
 
-    for (int i = 0; i < inputSlots.length; ++i) {
-      int slot = inputSlots[i];
-      Iterator iterator = this.virtualAquariumMachineRecipe.iterator();
-
-      while (iterator.hasNext()) {
-        VirtualAquariumMachineRecipe produce = (VirtualAquariumMachineRecipe) iterator.next();
-        ItemStack itemInSlot = inv.getItemInSlot(slot);
-        final ItemStack itemInInput = produce.getInput()[0];
-        if (itemInSlot != null && itemInInput != null && (itemInSlot.getType() == itemInInput.getType())
-            && InvUtils.fits(inv.toInventory(), produce.getOutput()[0], this.getOutputSlots())) {
-
-          ItemMeta itemMeta = itemInSlot.getItemMeta();
-
-          if(itemMeta != null && !itemMeta.isUnbreakable()){
-            Damageable durability = (Damageable) itemMeta;
-            int current = durability.getDamage();
-            if (current + 2 >= itemInSlot.getType().getMaxDurability()) {
-              inv.consumeItem(slot);
-            } else {
-              ((Damageable) itemMeta).setDamage(current + 2);
-              itemInSlot.setItemMeta(itemMeta);
-              inv.replaceExistingItem(slot, itemInSlot);
-            }
-          }
-          return produce;
+      for (VirtualAquariumMachineRecipe produce : virtualAquariumMachineRecipe) {
+        ItemStack itemInInput = produce.getInput()[0];
+        if (itemInInput == null || itemInSlot.getType() != itemInInput.getType()) {
+          continue;
         }
+
+        ItemStack material = UtilMachine.getMaterial(produce.getOutput(), UtilMachine.getRandomInt());
+        if (material == null) {
+          continue;
+        }
+        ItemStack chosen = material.clone();
+        chosen.setAmount(1);
+        if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), new ItemStack[] {chosen})) {
+          continue;
+        }
+
+        ItemMeta itemMeta = itemInSlot.getItemMeta();
+        if (itemMeta instanceof Damageable durability && !itemMeta.isUnbreakable()) {
+          int current = durability.getDamage();
+          if (current + 2 >= itemInSlot.getType().getMaxDurability()) {
+            inv.consumeItem(slot);
+          } else {
+            durability.setDamage(current + 2);
+            itemInSlot.setItemMeta(itemMeta);
+            inv.replaceExistingItem(slot, itemInSlot);
+          }
+        }
+        selectedOutput.put(inv.getBlock(), chosen);
+        return produce;
       }
     }
-
     return null;
   }
 
@@ -177,49 +183,58 @@ public class VirtualAquarium extends SimpleItemWithLargeContainerMachine {
       return;
     }
 
-    if (isProcessing(b)) {
-
-      var recipeOutput = processing.get(b).getOutput();
-      if (notHasSpaceOutput(inv, recipeOutput)) {
-        updateStatusOutputFull(inv);
-        return;
-      }
-
-      if (getCharge(b.getLocation()) < getEnergyConsumption()) {
-        updateStatusConnectEnergy(inv, recipeOutput[0]);
-        return;
-      }
-
-      if (takeCharge(b.getLocation())) {
-        int timeleft = progress.get(b);
-        if (timeleft > 0) {
-          ChestMenuUtils.updateProgressbar(inv, this.getStatusSlot(), timeleft, processing.get(b).getTicks(), getProgressBar());
-          int time = timeleft - getSpeed();
-          if (time < 0) {
-            time = 0;
-          }
-          progress.put(b, time);
-        } else {
-          ItemStack material = UtilMachine.getMaterial(recipeOutput, UtilMachine.getRandomInt());
-          if (material != null) {
-            final ItemStack itemStack = material.clone();
-            itemStack.setAmount(1);
-            inv.pushItem(itemStack, getOutputSlots());
-          }
-          progress.remove(b);
-          processing.remove(b);
-          updateStatusReset(inv);
-        }
-      }
-    } else {
+    MachineRecipe active = processing.get(b);
+    if (active == null) {
       MachineRecipe next = findNextRecipe(inv);
       if (next != null) {
         processing.put(b, next);
         progress.put(b, next.getTicks());
       } else {
+        selectedOutput.remove(b);
         updateStatusReset(inv);
       }
+      return;
     }
+
+    ItemStack output = selectedOutput.get(b);
+    if (output == null) {
+      processing.remove(b);
+      progress.remove(b);
+      updateStatusInvalidInput(inv);
+      return;
+    }
+    if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), new ItemStack[] {output})) {
+      updateStatusOutputFull(inv);
+      return;
+    }
+
+    int timeLeft = progress.getOrDefault(b, active.getTicks());
+    if (timeLeft <= 0) {
+      SupremeInventoryUtils.pushAll(inv, getOutputSlots(), new ItemStack[] {output});
+      processing.remove(b);
+      progress.remove(b);
+      selectedOutput.remove(b);
+      updateStatusReset(inv);
+      return;
+    }
+
+    if (getCharge(b.getLocation()) < getEnergyConsumption()) {
+      updateStatusConnectEnergy(inv, output);
+      return;
+    }
+
+    if (takeCharge(b.getLocation())) {
+      ChestMenuUtils.updateProgressbar(inv, getStatusSlot(), timeLeft, active.getTicks(),
+          getProgressBar());
+      progress.put(b, Math.max(timeLeft - getSpeed(), 0));
+    }
+  }
+
+  @Override
+  protected void onMachineBreak(Block block) {
+    processing.remove(block);
+    progress.remove(block);
+    selectedOutput.remove(block);
   }
 
   @Nonnull

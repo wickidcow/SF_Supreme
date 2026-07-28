@@ -8,6 +8,7 @@ import com.github.relativobr.supreme.resource.magical.SupremeAttribute;
 import com.github.relativobr.supreme.resource.magical.SupremeCetrus;
 import com.github.relativobr.supreme.resource.magical.SupremeCore;
 import com.github.relativobr.supreme.util.ItemGroups;
+import com.github.relativobr.supreme.util.SupremeInventoryUtils;
 import com.github.relativobr.supreme.util.SupremeItemStack;
 import com.github.relativobr.supreme.util.UtilEnergy;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -34,7 +35,6 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
-import org.springframework.scheduling.annotation.Async;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
@@ -43,7 +43,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-@Async
 public class TechRobotic extends SimpleItemContainerMachine implements Radioactive {
 
   public static final SlimefunItemStack TECH_ROBOTIC = new SupremeItemStack("SUPREME_TECH_ROBOTIC",
@@ -77,8 +76,9 @@ public class TechRobotic extends SimpleItemContainerMachine implements Radioacti
       SupremeCetrus.CETRUS_LUMIUM, SupremeComponents.CRYSTALLIZER_MACHINE};
 
   public static final List<AbstractItemRecipe> recipes = new ArrayList<>();
-  private Map<Block, ItemStack> processing = new HashMap<>();
-  private Map<Block, Integer> progressTime = new HashMap<>();
+  private final Map<Block, ItemStack> processing = new HashMap<>();
+  private final Map<Block, Integer> progressTime = new HashMap<>();
+  private final Map<Block, ItemStack> consumedInputs = new HashMap<>();
   private int speed = 1;
   private int amountUpgrade = 64;
 
@@ -169,44 +169,47 @@ public class TechRobotic extends SimpleItemContainerMachine implements Radioacti
   }
 
   public void tick(Block b) {
-
     BlockMenu inv = BlockStorage.getInventory(b);
-
-    final ItemStack itemProcess = processing.get(b);
-    if (itemProcess == null) {
-
-      final ItemStack itemOutput = validRecipeItem(inv);
-      if (itemOutput != null) {
-
-        invalidProgressBar(inv, itemOutput.getType(), " ");
-
-        processing.put(b, itemOutput);
-        progressTime.put(b, (getTimeProcess() * 2));
-
-      } else {
-
-        invalidProgressBar(inv, "&cTechRobotic unidentified recipe");
-
-      }
-
-    } else {
-
-      if (this.getProgressTime(b) <= 0) {
-
-        inv.pushItem(itemProcess.clone(), this.getOutputSlots());
-
-        processing.put(b, null);
-        progressTime.put(b, 0);
-        invalidProgressBar(inv, Material.BLACK_STAINED_GLASS_PANE, " ");
-
-      } else {
-
-        this.processTicks(b, inv, itemProcess);
-
-      }
-
+    if (inv == null) {
+      return;
     }
 
+    ItemStack itemProcess = processing.get(b);
+    if (itemProcess == null) {
+      AbstractItemRecipe recipe = findRecipe(inv);
+      if (recipe == null) {
+        invalidProgressBar(inv, "&cTechRobotic unidentified recipe");
+        return;
+      }
+
+      ItemStack output = recipe.getFirstItemOutput().clone();
+      if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), output)) {
+        invalidProgressBar(inv, "&cOutput is full");
+        return;
+      }
+
+      ItemStack consumed = recipe.getFirstItemInput().clone();
+      consumed.setAmount(getAmountUpgrade());
+      inv.consumeItem(getInputSlots()[0], getAmountUpgrade());
+      consumedInputs.put(b, consumed);
+      processing.put(b, output);
+      progressTime.put(b, getTimeProcess() * 2);
+      invalidProgressBar(inv, output.getType(), " ");
+      return;
+    }
+
+    if (getProgressTime(b) <= 0) {
+      if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), itemProcess)) {
+        invalidProgressBar(inv, "&cOutput is full");
+        return;
+      }
+      SupremeInventoryUtils.pushAll(inv, getOutputSlots(), itemProcess);
+      clearState(b);
+      invalidProgressBar(inv, Material.BLACK_STAINED_GLASS_PANE, " ");
+      return;
+    }
+
+    processTicks(b, inv, itemProcess);
   }
 
   public int getProgressTime(Block b) {
@@ -239,18 +242,37 @@ public class TechRobotic extends SimpleItemContainerMachine implements Radioacti
     }
   }
 
-  private ItemStack validRecipeItem(BlockMenu inv) {
+  private AbstractItemRecipe findRecipe(BlockMenu inv) {
+    if (inv == null) {
+      return null;
+    }
+    ItemStack input = inv.getItemInSlot(getInputSlots()[0]);
+    if (input == null || input.getAmount() < getAmountUpgrade()) {
+      return null;
+    }
 
-    for (AbstractItemRecipe produce : this.recipes) {
-      ItemStack itemStack = produce.getFirstItemInput();
-      itemStack.setAmount(getAmountUpgrade());
-      if (SlimefunUtils.isItemSimilar(inv.getItemInSlot(getInputSlots()[0]), itemStack, false, true)) {
-        inv.consumeItem(getInputSlots()[0], getAmountUpgrade());
-        return produce.getFirstItemOutput();
+    for (AbstractItemRecipe recipe : recipes) {
+      ItemStack required = recipe.getFirstItemInput();
+      if (required != null && SlimefunUtils.isItemSimilar(input, required, false, true)) {
+        return recipe;
       }
-
     }
     return null;
+  }
+
+  private void clearState(Block block) {
+    processing.remove(block);
+    progressTime.remove(block);
+    consumedInputs.remove(block);
+  }
+
+  @Override
+  protected void onMachineBreak(Block block) {
+    ItemStack consumed = consumedInputs.get(block);
+    if (consumed != null && block.getWorld() != null) {
+      block.getWorld().dropItemNaturally(block.getLocation(), consumed.clone());
+    }
+    clearState(block);
   }
 
   @Nonnull
@@ -260,7 +282,7 @@ public class TechRobotic extends SimpleItemContainerMachine implements Radioacti
     this.recipes
         .stream().filter(Objects::nonNull)
         .forEach(recipe -> {
-      ItemStack itemStack = recipe.getFirstItemOutput().clone();
+      ItemStack itemStack = recipe.getFirstItemInput().clone();
       itemStack.setAmount(getAmountUpgrade());
       displayRecipes.add(itemStack);
       displayRecipes.add(recipe.getFirstItemOutput());

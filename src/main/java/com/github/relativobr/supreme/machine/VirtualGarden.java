@@ -5,6 +5,7 @@ import com.github.relativobr.supreme.machine.recipe.VirtualGardenMachineRecipe;
 import com.github.relativobr.supreme.resource.SupremeComponents;
 import com.github.relativobr.supreme.resource.magical.SupremeAttribute;
 import com.github.relativobr.supreme.resource.magical.SupremeCetrus;
+import com.github.relativobr.supreme.util.SupremeInventoryUtils;
 import com.github.relativobr.supreme.util.SupremeItemStack;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -13,7 +14,6 @@ import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.MachineTier;
 import io.github.thebusybiscuit.slimefun4.core.attributes.MachineType;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
-import io.github.thebusybiscuit.slimefun4.libraries.dough.inventory.InvUtils;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
 import io.github.thebusybiscuit.slimefun4.utils.LoreBuilder;
@@ -36,9 +36,7 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import org.springframework.scheduling.annotation.Async;
 
-@Async
 public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
 
   public static final SlimefunItemStack VIRTUAL_GARDEN_MACHINE = new SupremeItemStack("SUPREME_VIRTUAL_GARDEN_I",
@@ -69,8 +67,8 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
       VirtualGarden.VIRTUAL_GARDEN_MACHINE_II, SupremeComponents.SUPREME, SupremeComponents.CRYSTALLIZER_MACHINE,
       SupremeCetrus.CETRUS_LUMIUM, SupremeComponents.CRYSTALLIZER_MACHINE};
 
-  public static Map<Block, MachineRecipe> processing = new HashMap<>();
-  public static Map<Block, Integer> progress = new HashMap<>();
+  private final Map<Block, MachineRecipe> processing = new HashMap<>();
+  private final Map<Block, Integer> progress = new HashMap<>();
   private final Set<VirtualGardenMachineRecipe> virtualGardenMachineRecipes = new HashSet();
 
   @ParametersAreNonnullByDefault
@@ -137,8 +135,9 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
       for (VirtualGardenMachineRecipe produce : this.virtualGardenMachineRecipes) {
         ItemStack itemInSlot = inv.getItemInSlot(slot);
         final ItemStack itemInInput = produce.getInput()[0];
-        if (itemInSlot != null && itemInInput != null && itemInSlot.getType() == itemInInput.getType() && InvUtils.fits(
-            inv.toInventory(), produce.getOutput()[0], this.getOutputSlots())) {
+        if (itemInSlot != null && itemInInput != null
+            && itemInSlot.getType() == itemInInput.getType()
+            && SupremeInventoryUtils.canFit(inv, getOutputSlots(), produce.getOutput())) {
           return produce;
         }
       }
@@ -153,42 +152,8 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
       return;
     }
 
-    if (isProcessing(b)) {
-
-      var recipeOutput = processing.get(b).getOutput();
-      if (notHasSpaceOutput(inv, recipeOutput)) {
-        updateStatusOutputFull(inv);
-        return;
-      }
-
-      if (getCharge(b.getLocation()) < getEnergyConsumption()) {
-        updateStatusConnectEnergy(inv, recipeOutput[0]);
-        return;
-      }
-
-      if (takeCharge(b.getLocation())) {
-        int timeleft = progress.get(b);
-        if (timeleft > 0) {
-          ChestMenuUtils.updateProgressbar(inv, getStatusSlot(), timeleft, processing.get(b).getTicks(), getProgressBar());
-          int time = timeleft - getSpeed();
-          if (time < 0) {
-            time = 0;
-          }
-          progress.put(b, time);
-        } else {
-          for (ItemStack output : recipeOutput) {
-            if(output != null){
-              ItemStack clone = output.clone();
-              clone.setAmount(1);
-              inv.pushItem(clone, getOutputSlots());
-            }
-          }
-          progress.remove(b);
-          processing.remove(b);
-          updateStatusReset(inv);
-        }
-      }
-    } else {
+    MachineRecipe active = processing.get(b);
+    if (active == null) {
       MachineRecipe next = findNextRecipe(inv);
       if (next != null) {
         processing.put(b, next);
@@ -196,7 +161,40 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
       } else {
         updateStatusReset(inv);
       }
+      return;
     }
+
+    ItemStack[] recipeOutput = active.getOutput();
+    if (notHasSpaceOutput(inv, recipeOutput)) {
+      updateStatusOutputFull(inv);
+      return;
+    }
+
+    int timeLeft = progress.getOrDefault(b, active.getTicks());
+    if (timeLeft <= 0) {
+      SupremeInventoryUtils.pushAll(inv, getOutputSlots(), recipeOutput);
+      processing.remove(b);
+      progress.remove(b);
+      updateStatusReset(inv);
+      return;
+    }
+
+    if (getCharge(b.getLocation()) < getEnergyConsumption()) {
+      updateStatusConnectEnergy(inv, recipeOutput.length > 0 ? recipeOutput[0] : null);
+      return;
+    }
+
+    if (takeCharge(b.getLocation())) {
+      ChestMenuUtils.updateProgressbar(inv, getStatusSlot(), timeLeft, active.getTicks(),
+          getProgressBar());
+      progress.put(b, Math.max(timeLeft - getSpeed(), 0));
+    }
+  }
+
+  @Override
+  protected void onMachineBreak(Block block) {
+    processing.remove(block);
+    progress.remove(block);
   }
 
   @Nonnull

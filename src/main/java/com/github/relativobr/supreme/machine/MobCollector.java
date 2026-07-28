@@ -7,6 +7,7 @@ import com.github.relativobr.supreme.machine.recipe.MobCollectorMachineRecipe;
 import com.github.relativobr.supreme.resource.SupremeComponents;
 import com.github.relativobr.supreme.resource.magical.SupremeAttribute;
 import com.github.relativobr.supreme.resource.magical.SupremeCetrus;
+import com.github.relativobr.supreme.util.SupremeInventoryUtils;
 import com.github.relativobr.supreme.util.SupremeItemStack;
 import com.github.relativobr.supreme.util.SupremeOptions;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
@@ -17,12 +18,10 @@ import io.github.thebusybiscuit.slimefun4.core.attributes.MachineTier;
 import io.github.thebusybiscuit.slimefun4.core.attributes.MachineType;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
 import io.github.thebusybiscuit.slimefun4.libraries.commons.lang.Validate;
-import io.github.thebusybiscuit.slimefun4.libraries.dough.inventory.InvUtils;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
 import io.github.thebusybiscuit.slimefun4.utils.LoreBuilder;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,9 +40,7 @@ import org.bukkit.entity.*;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.springframework.scheduling.annotation.Async;
 
-@Async
 public class MobCollector extends SimpleItemWithLargeContainerMachine {
 
   public static final SlimefunItemStack MOB_COLLECTOR_MACHINE = new SupremeItemStack("SUPREME_MOB_COLLECTOR_MACHINE_I",
@@ -75,8 +72,9 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
       MobCollector.MOB_COLLECTOR_MACHINE_II, SupremeComponents.SUPREME, SupremeComponents.CRYSTALLIZER_MACHINE,
       SupremeCetrus.CETRUS_LUMIUM, SupremeComponents.CRYSTALLIZER_MACHINE};
 
-  public static Map<Block, MachineRecipe> processing = new HashMap<>();
-  public static Map<Block, Integer> progress = new HashMap<>();
+  private final Map<Block, MachineRecipe> processing = new HashMap<>();
+  private final Map<Block, Integer> progress = new HashMap<>();
+  private final Map<Block, Integer> selectedInputSlots = new HashMap<>();
   private final Set<MobCollectorMachineRecipe> mobCollectorMachineRecipes = new HashSet();
   private int mobRange = 4;
 
@@ -306,39 +304,32 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
 
   @Override
   protected MachineRecipe findNextRecipe(@Nonnull BlockMenu inv) {
-    int[] inputSlots = this.getInputSlots();
+    Block block = inv.getBlock();
+    selectedInputSlots.remove(block);
 
-    for (int i = 0; i < inputSlots.length; ++i) {
-      int slot = inputSlots[i];
-      Iterator iterator = this.mobCollectorMachineRecipes.iterator();
+    for (int slot : getInputSlots()) {
+      ItemStack itemInSlot = inv.getItemInSlot(slot);
+      if (itemInSlot == null || itemInSlot.getType().isAir()) {
+        continue;
+      }
 
-      while (iterator.hasNext()) {
-        MobCollectorMachineRecipe produce = (MobCollectorMachineRecipe) iterator.next();
-        ItemStack itemInSlot = inv.getItemInSlot(slot);
-        final ItemStack itemInInput = produce.getInput()[0];
-        if (itemInSlot != null && itemInInput != null && (itemInSlot.getType() == itemInInput.getType())
-            && InvUtils.fits(inv.toInventory(), produce.getOutput()[0], this.getOutputSlots())) {
-          Block invBlock = inv.getBlock();
-          produce.getClass();
-          if (this.isAnimalNearby(invBlock, produce::test)) {
-            if (itemInSlot.getType() == Material.GLASS_BOTTLE) {
-              inv.consumeItem(slot, this.getSpeed());
-            } else {
-              ItemMeta itemMeta = itemInSlot.getItemMeta();
-              if(itemMeta != null && !itemMeta.isUnbreakable()) {
-                Damageable durability = (Damageable) itemMeta;
-                int current = durability.getDamage();
-                if (current + 2 >= itemInSlot.getType().getMaxDurability()) {
-                  inv.consumeItem(slot);
-                } else { //reduce
-                  ((Damageable) itemMeta).setDamage(current + 2);
-                  itemInSlot.setItemMeta(itemMeta);
-                  inv.replaceExistingItem(slot, itemInSlot);
-                }
-              }
-            }
-            return produce;
-          }
+      for (MobCollectorMachineRecipe produce : mobCollectorMachineRecipes) {
+        ItemStack itemInInput = produce.getInput()[0];
+        if (itemInInput == null || itemInSlot.getType() != itemInInput.getType()) {
+          continue;
+        }
+        if (itemInSlot.getType() == Material.GLASS_BOTTLE
+            && itemInSlot.getAmount() < Math.max(1, itemInInput.getAmount())) {
+          continue;
+        }
+        if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), produce.getOutput())) {
+          continue;
+        }
+        if (isAnimalNearby(block, produce::test)) {
+          // Reserve only the slot reference here. The tool/bottle cost is committed atomically
+          // with the output after processing completes, so no input is lost while power is absent.
+          selectedInputSlots.put(block, slot);
+          return produce;
         }
       }
     }
@@ -370,42 +361,8 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
       return;
     }
 
-    if (isProcessing(b)) {
-
-      var recipeOutput = processing.get(b).getOutput();
-      if (notHasSpaceOutput(inv, recipeOutput)) {
-        updateStatusOutputFull(inv);
-        return;
-      }
-
-      if (getCharge(b.getLocation()) < getEnergyConsumption()) {
-        updateStatusConnectEnergy(inv, recipeOutput[0]);
-        return;
-      }
-
-      if (takeCharge(b.getLocation())) {
-        int timeleft = progress.get(b);
-        if (timeleft > 0) {
-          ChestMenuUtils.updateProgressbar(inv, getStatusSlot(), timeleft, processing.get(b).getTicks(), getProgressBar());
-          int time = timeleft - getSpeed();
-          if (time < 0) {
-            time = 0;
-          }
-          progress.put(b, time);
-        } else {
-          for (ItemStack output : recipeOutput) {
-            if(output != null){
-              ItemStack clone = output.clone();
-              clone.setAmount(1);
-              inv.pushItem(clone, getOutputSlots());
-            }
-          }
-          progress.remove(b);
-          processing.remove(b);
-          updateStatusReset(inv);
-        }
-      }
-    } else {
+    MachineRecipe active = processing.get(b);
+    if (active == null) {
       MachineRecipe next = findNextRecipe(inv);
       if (next != null) {
         processing.put(b, next);
@@ -413,7 +370,85 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
       } else {
         updateStatusReset(inv);
       }
+      return;
     }
+
+    ItemStack[] recipeOutput = active.getOutput();
+    if (notHasSpaceOutput(inv, recipeOutput)) {
+      updateStatusOutputFull(inv);
+      return;
+    }
+
+    int timeLeft = progress.getOrDefault(b, active.getTicks());
+    if (timeLeft <= 0) {
+      if (!commitCollectorInput(b, inv, active)) {
+        clearCollectorState(b);
+        updateStatusInvalidInput(inv);
+        return;
+      }
+      SupremeInventoryUtils.pushAll(inv, getOutputSlots(), recipeOutput);
+      clearCollectorState(b);
+      updateStatusReset(inv);
+      return;
+    }
+
+    if (getCharge(b.getLocation()) < getEnergyConsumption()) {
+      updateStatusConnectEnergy(inv, recipeOutput.length > 0 ? recipeOutput[0] : null);
+      return;
+    }
+
+    if (takeCharge(b.getLocation())) {
+      ChestMenuUtils.updateProgressbar(inv, getStatusSlot(), timeLeft, active.getTicks(),
+          getProgressBar());
+      progress.put(b, Math.max(timeLeft - getSpeed(), 0));
+    }
+  }
+
+  private boolean commitCollectorInput(Block block, BlockMenu menu, MachineRecipe recipe) {
+    Integer slot = selectedInputSlots.get(block);
+    ItemStack[] inputs = recipe.getInput();
+    if (slot == null || inputs == null || inputs.length == 0 || inputs[0] == null) {
+      return false;
+    }
+
+    ItemStack required = inputs[0];
+    ItemStack current = menu.getItemInSlot(slot);
+    if (current == null || current.getType() != required.getType()) {
+      return false;
+    }
+
+    if (current.getType() == Material.GLASS_BOTTLE) {
+      int amount = Math.max(1, required.getAmount());
+      if (current.getAmount() < amount) {
+        return false;
+      }
+      menu.consumeItem(slot, amount);
+      return true;
+    }
+
+    ItemMeta itemMeta = current.getItemMeta();
+    if (itemMeta instanceof Damageable durability && !itemMeta.isUnbreakable()) {
+      int currentDamage = durability.getDamage();
+      if (currentDamage + 2 >= current.getType().getMaxDurability()) {
+        menu.consumeItem(slot);
+      } else {
+        durability.setDamage(currentDamage + 2);
+        current.setItemMeta(itemMeta);
+        menu.replaceExistingItem(slot, current);
+      }
+    }
+    return true;
+  }
+
+  private void clearCollectorState(Block block) {
+    processing.remove(block);
+    progress.remove(block);
+    selectedInputSlots.remove(block);
+  }
+
+  @Override
+  protected void onMachineBreak(Block block) {
+    clearCollectorState(block);
   }
 
   @Nonnull

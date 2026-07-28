@@ -29,22 +29,24 @@ public class AbstractItemRecipe {
     return filterNotNull(this.getOutput());
   }
 
-  private ItemStack[] filterNotNull(ItemStack[] array){
+  private ItemStack[] filterNotNull(ItemStack[] array) {
     List<ItemStack> list = new ArrayList<>();
-    for (ItemStack itemStack : array) {
-      if(itemStack != null){
-        list.add(itemStack);
+    if (array != null) {
+      for (ItemStack itemStack : array) {
+        if (itemStack != null) {
+          list.add(itemStack);
+        }
       }
     }
     return list.toArray(new ItemStack[0]);
   }
 
   public ItemStack getItemInput(int index) {
-    return input[index];
+    return input != null && index >= 0 && index < input.length ? input[index] : null;
   }
 
   public ItemStack getItemOutput(int index) {
-    return output[index];
+    return output != null && index >= 0 && index < output.length ? output[index] : null;
   }
 
   public Material getMaterialInput(int index) {

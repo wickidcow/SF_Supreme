@@ -1,33 +1,36 @@
 package com.github.relativobr.supreme.generic.electric;
 
 import com.github.relativobr.supreme.Supreme;
+import com.github.relativobr.supreme.libs.guizhanlib.slimefun.machines.MenuBlock;
 import com.github.relativobr.supreme.util.UtilEnergy;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetProvider;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
-import javax.annotation.Nonnull;
-
+import io.github.thebusybiscuit.slimefun4.libraries.dough.blocks.BlockPosition;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import javax.annotation.Nonnull;
 import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.inventory.DirtyChestMenu;
-import net.guizhanss.guizhanlib.slimefun.machines.MenuBlock;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
 
+/** Energy generator whose cached generation state is isolated per placed block. */
 public final class EnergyGenerator extends MenuBlock implements EnergyNetProvider {
 
+  private final Map<BlockPosition, Integer> generatedOutput = new ConcurrentHashMap<>();
+  private final Map<BlockPosition, Integer> currentDelay = new ConcurrentHashMap<>();
   private int energy;
   private int buffer;
-  private int generate = 0;
-  private int currentDelay = 0;
   private GenerationType type;
-
 
   public EnergyGenerator(ItemGroup categories, SlimefunItemStack item, ItemStack[] recipe) {
     super(categories, item, RecipeType.ENHANCED_CRAFTING_TABLE, recipe);
@@ -38,17 +41,17 @@ public final class EnergyGenerator extends MenuBlock implements EnergyNetProvide
   }
 
   public EnergyGenerator setType(GenerationType value) {
-    this.type = value;
+    type = value;
     return this;
   }
 
   public EnergyGenerator setEnergy(int value) {
-    this.energy = value;
+    energy = value;
     return this;
   }
 
   public EnergyGenerator setBuffer(int value) {
-    this.buffer = value;
+    buffer = value;
     return this;
   }
 
@@ -59,17 +62,17 @@ public final class EnergyGenerator extends MenuBlock implements EnergyNetProvide
   }
 
   @Override
-  protected void setup(BlockMenuPreset blockMenuPreset) {
-    blockMenuPreset.drawBackground(new int[] {
-            0, 1, 2, 3, 4, 5, 6, 7, 8,
-            9, 10, 11, 12, 13, 14, 15, 16, 17,
-            18, 19, 20, 21, 22, 23, 24, 25, 26
+  protected void setup(BlockMenuPreset preset) {
+    preset.drawBackground(new int[] {
+        0, 1, 2, 3, 4, 5, 6, 7, 8,
+        9, 10, 11, 12, 13, 14, 15, 16, 17,
+        18, 19, 20, 21, 22, 23, 24, 25, 26
     });
   }
 
   @Nonnull
   @Override
-  protected int[] getInputSlots(DirtyChestMenu dirtyChestMenu, ItemStack itemStack) {
+  protected int[] getInputSlots(DirtyChestMenu menu, ItemStack itemStack) {
     return new int[0];
   }
 
@@ -84,46 +87,57 @@ public final class EnergyGenerator extends MenuBlock implements EnergyNetProvide
   }
 
   @Override
-  public int getGeneratedOutput(Location l, Config data) {
-
-    if(this.generate > 0 && (this.currentDelay < Supreme.getSupremeOptions().getDelayTimeValidGenerators())){
-      this.currentDelay++;
-    } else {
-      // check block
-      this.generate = this.type.generate(l.getWorld(), l.getBlock(), this.energy);
-      this.currentDelay = 0;
+  public int getGeneratedOutput(Location location, Config data) {
+    if (location == null || location.getWorld() == null || type == null) {
+      return 0;
     }
 
+    BlockPosition position = new BlockPosition(location);
+    int generation = generatedOutput.getOrDefault(position, 0);
+    int delay = currentDelay.getOrDefault(position, 0);
+    int cacheTicks = Math.max(0,
+        Supreme.getSupremeOptions().getDelayTimeValidGenerators());
 
-    BlockMenu inv = BlockStorage.getInventory(l);
-    if (inv != null && inv.hasViewer()) {
-      if (this.generate == 0) {
-        inv.replaceExistingItem(13, new CustomItemStack(
-                Material.RED_STAINED_GLASS_PANE,
-                "&cNot generating",
-                "&7Type: &6" + this.type,
-                "&7Stored: &6" + UtilEnergy.format(getCharge(l)) + " J",
-                "&7Capacity: &6" + UtilEnergy.format(this.buffer) + " J"
-        ));
+    if (generation > 0 && delay < cacheTicks) {
+      currentDelay.put(position, delay + 1);
+    } else {
+      generation = Math.max(0, type.generate(location.getWorld(), location.getBlock(), energy));
+      generatedOutput.put(position, generation);
+      currentDelay.put(position, 0);
+    }
+
+    BlockMenu menu = BlockStorage.getInventory(location);
+    if (menu != null && menu.hasViewer()) {
+      if (generation == 0) {
+        menu.replaceExistingItem(13, new CustomItemStack(
+            Material.RED_STAINED_GLASS_PANE,
+            "&cNot generating",
+            "&7Type: &6" + type,
+            "&7Stored: &6" + UtilEnergy.format(getCharge(location)) + " J",
+            "&7Capacity: &6" + UtilEnergy.format(buffer) + " J"));
       } else {
-        inv.replaceExistingItem(13, new CustomItemStack(
-                Material.GREEN_STAINED_GLASS_PANE,
-                "&aGeneration",
-                "&7Type: &6" + this.type,
-                "&7Generating: &6" + UtilEnergy.format(this.generate) + " J/tick ",
-                "&7Stored: &6" + UtilEnergy.format(getCharge(l)) + " J",
-                "&7Capacity: &6" + UtilEnergy.format(this.buffer) + " J"
-        ));
+        menu.replaceExistingItem(13, new CustomItemStack(
+            Material.GREEN_STAINED_GLASS_PANE,
+            "&aGeneration",
+            "&7Type: &6" + type,
+            "&7Generating: &6" + UtilEnergy.format(generation) + " J/tick ",
+            "&7Stored: &6" + UtilEnergy.format(getCharge(location)) + " J",
+            "&7Capacity: &6" + UtilEnergy.format(buffer) + " J"));
       }
     }
+    return generation;
+  }
 
-    return this.generate;
+  @Override
+  protected void onBreak(BlockBreakEvent event, BlockMenu menu) {
+    BlockPosition position = new BlockPosition(event.getBlock().getLocation());
+    generatedOutput.remove(position);
+    currentDelay.remove(position);
+    super.onBreak(event, menu);
   }
 
   @Override
   public int getCapacity() {
-    return this.buffer;
+    return buffer;
   }
-
-
 }
