@@ -1,152 +1,111 @@
-# Supreme
-Supreme is an addon for Slimefun which adds 100+ various new resources that will allow you to craft powerful new items, weapons, tools and armor. These can be made up from titanium, aurum, adamantium, thornium with some being magical, rare, epic, legendary or supreme! It also adds 12 new electric generators, 5 new capacitors and even more... 
+# Supreme Legacy
 
-## Requirements
+A maintained, English-first Supreme fork for modern Paper servers and the Slimefun 4-compatible API family.
 
-Minecraft Version: +1.17
+This branch keeps the original Supreme gameplay and item IDs while modernizing machine safety, dependency handling, and cross-fork build support. Slimefun 5 was reviewed only for implementation ideas because its API is a rewrite and is not a runtime target for this branch.
 
+## Runtime targets
 
+| Slimefun implementation | Goal | Build profile |
+|---|---:|---|
+| Slimefun Legacy | Primary | `legacy` (default) |
+| Slimefun Gugu | Supported API target | `gugu` |
+| Slimefun United | Supported API target | `united` |
+| Original Slimefun 4 RC-37 API | Compatibility baseline | `official` |
 
-### [Download](https://blob.build/project/Supreme)
-[![Build Status](https://thebusybiscuit.github.io/builds/RelativoBR/Supreme/main/badge.svg)](https://blob.build/project/Supreme)
+- Target server API: Paper 1.21.11 / Paper 26.x
+- Source compatibility: Java 21
+- Recommended runtime for the primary Legacy build: Java 25
+- Hard runtime dependency: `Slimefun`
+- No Spring runtime and no separate GuizhanLib runtime are required.
 
+## What changed in this maintenance update
 
-## Bugs/Suggestions
+### Machine and inventory safety
 
-Make a new issue, pull request, or discord Slimefun-Addon-Community
+- Prevents recipes from starting when the complete output cannot fit.
+- Prevents partial output insertion and item voiding when output slots fill during processing.
+- Restores reserved recipe inputs when a machine is broken before completion.
+- Fixes null-sensitive machine break handling.
+- Fixes recipes whose required ingredients arrive over multiple cargo ticks.
+- Keeps incomplete recipe inputs visible and does not reserve them while the machine lacks power.
+- Lets cargo fill empty input slots when a recipe requires the same item in multiple slots.
+- Fixes Tech Mutation same-item automation and preserves one success roll while output is blocked.
+- Fixes Tech Robotic recipe mutation and validates the complete upgrade input amount.
+- Fixes MobTech Collector double consumption of Empty MobTech shells.
+- Commits Mob Collector bottle/tool cost only when its output is ready to be delivered.
+- Corrects Mob Collector Tool III to its intended 50,000 J charge capacity.
+- Isolates processing state per placed block for collectors, gardens, aquariums, quarries, and generators.
 
-<p>
-  <a href="https://discord.gg/slimefun">
-    <img src="https://discordapp.com/api/guilds/565557184348422174/widget.png?style=banner3" alt="Discord Invite"/>
-  </a>
-  <a href="https://discord.gg/SqD3gg5SAU">
-    <img src="https://discordapp.com/api/guilds/809178621424041997/widget.png?style=banner3" alt="Discord Invite"/>
-  </a>
-</p>
+### Modern server compatibility
 
+- Uses Paper 1.21.11 as the compile API.
+- Replaces removed direct enchantment constants with namespaced lookups.
+- Handles the old/new happy-villager particle name safely.
+- Makes block/entity/inventory access synchronous where Bukkit state is touched.
+- Supports any Bukkit `InventoryHolder` below a quarry instead of only a narrow container list.
+- Persists quarry enabled state per placed quarry instead of sharing one global toggle.
+- Prevents generator output caches and delay counters from leaking between placed generators.
 
-## Machines
-- **Core Fabricator** - MultiBlock Machine - You can craft core here
-- **Gear Fabricator** - MultiBlock Machine - You can craft weapons, armor and tools here
-- **Magical Fabricator** - MultiBlock Machine - You can craft magical here
-- **Electric Core Machine** - Craft resource of core
-- **Electric Magical Machine** - Craft resource of magical
-- **Forge Ingot** - This machine allows you to forge ingot resources
-- **Forge Magical** - This machine allows you to forge magical resources
-- **Foundry** - Foundry and Synthesizer Items
-- **Magic Altar** - Craft Rune and Magical Items
-- **Mob Collector** - This machine allows you to collect items from nearby mobs
-- **Virtual Aquarium** - This machine allows you to collect items that are collected at sea
-- **Virtual Garden** - This machine allows you to cultivate some resources
-- **MobTech Collector** - This machine allows you to collect mobs nearby, an item used to increase the performance of machines, whether reducing time, increasing production or saving energy.
-- **Tech Mutation** - Generator mutation to progress mobtech (heads) to higher levels, through mutation types, where there is a success probability depending on the machine level that varies from 20% to 25% in tier I and from 80% to 100% in tier III.
-- **Tech Robotic** - Similar to the previous mutation machine, but it doesn't deal with luck, it works with science where a specific amount of resources can be used to evolve the mobtech, being 64x for tier I, tier II with 32 and tier III with 16x
-- **Tech Generator** - Using power and a specific crafting card to generate materials slowly, but with mobtech the bees, golem and zombie, mutant or robotics can speed up this process to more satisfying levels
-- **CheckInventory** - A lamp that helps you see if a certain item and amound is present in a chest
-- **Cobblestone Quarry** - Generate Cobblestone
-- **Coal Quarry** - Generate basic resource
-- **Iron Quarry** - Generate basic resource
-- **Gold Quarry** - Generate basic resource
-- **Diamond Quarry** - Generate basic resource
-- **Thornium Quarry** - Generate advanced resource
-- **Nuggets of Supreme Quarry** - Generate advanced resource
+### Dependency cleanup
 
+- Removes inert Spring `@Async` annotations and the Spring dependency.
+- Vendors the small localization/menu helper subset Supreme actually uses.
+- Removes the hard compile/runtime dependency on external GuizhanLib variants.
+- Disables the original upstream Dev-channel auto-updater so it cannot overwrite the maintained fork.
+- Keeps the plugin package isolated from Slimefun's own shaded libraries.
 
-## Generators
-- **Aurum Capacitor** 
-- **Titanium Capacitor** 
-- **Adamantium Capacitor** 
-- **Thornium Capacitor** 
-- **Supreme Capacitor**
-- **GeneratorMob** - Generates energy from methane generated by animals
-- **Basic Ignis Generator** - Need fire under this block to work
-- **Ignis Generator** - Need fire under this block to work
-- **Basic Ventus Generator** - It needs to be with its faces in the wind to work
-- **Ventus Generator** - It needs to be with its faces in the wind to work
-- **Basic Aqua Generator** - Need water under this block to work
-- **Aqua Generator** - Need water under this block to work
-- **Basic Lux Generator** - Needs to receive sunlight for moonlight to work
-- **Lux Generator** - Needs to receive sunlight for moonlight to work
-- **Basic Lumium Generator** - Needs to be below ground to work
-- **Lumium Generator** - Needs to be below ground to work
-- **Thornium Generator** - Generates energy anywhere
-- **Supreme Generator** - Generates energy anywhere
+## Building
 
+### Slimefun Legacy (default)
 
-## Gear / Tools
-- **Aurum Tools** - Basic tier
-- **Aurum Weapons** - Basic tier
-- **Aurum Armor** - Basic tier
-- **Titanium Tools** - Basic tier
-- **Titanium Weapons** - Basic tier
-- **Titanium Armor** - Basic tier
-- **Adamantium Tools** - Basic tier
-- **Adamantium Weapons** - Basic tier
-- **Adamantium Armor** - Basic tier
-- **Thornium Tools** - Advanced tier
-- **Thornium Weapons** - Advanced tier
-- **Thornium Armor** - Advanced tier
-- **Magic Tools** - Advanced tier
-- **Magic Weapons** - Advanced tier
-- **Magic Armor** - Advanced tier
-- **Rare Tools** - Advanced tier
-- **Rare Weapons** - Advanced tier
-- **Rare Armor** - Advanced tier
-- **Epic Tools** - Endgame tier
-- **Epic Weapons** - Endgame tier
-- **Epic Armor** - Endgame tier
-- **Legendary Tools** - Endgame tier
-- **Legendary Weapons** - Endgame tier
-- **Legendary Armor** - Endgame tier
-- **Supreme Tools** - Endgame tier
-- **Supreme Weapons** - Endgame tier
-- **Supreme Armor** - Endgame tier
+The GitHub workflow checks out `wickidcow/Slimefun-Legacy`, publishes its API to the runner's local Maven repository, and then builds Supreme:
 
+```bash
+mvn -Plegacy clean verify
+```
 
-## Resource Core
-- **Core of Life** - This core contains fragments of life that have been collected by the world
-- **Core of Death** - This core contains the souls of various entities that have gone beyond
-- **Core of Color** - This core contains several colors that have been collected around the world
-- **Core of Block** - This core contains several blocks that have been collected around the world
-- **Core of Nature** - This core contains several natural that have been collected around the world
-- **Core of Alloy** - This core contains several ores that have been collected around the world
+Output:
 
+```text
+target/Supreme-Legacy.jar
+```
 
-## Resource Magical
-- **Cetrus Lux** - A super Lux scepter
-- **Cetrus Ventus** - A super Ventus scepter
-- **Cetrus Lumium** - A super Lumium scepter
-- **Cetrus Aqua** - A super Aqua scepter
-- **Cetrus Ignis** - A super Ignis scepter
-- **Attribute Magic** - A super Magic attribute with special effect
-- **Attribute Bomb** - A super Bomb attribute with special effects
-- **Attribute Fortune** - A super Fortune attribute with special effects
-- **Attribute Impetus** - A super Impetus attribute with special effects
+### Other API checks
 
+```bash
+mvn -Pofficial -DskipTests clean package
+mvn -Pgugu -DskipTests clean package
+mvn -Punited -DskipTests clean package
+```
 
-## Customize Configuration (config.yml)
+These profiles are compile-compatibility checks. Distribute the normal Legacy-built jar unless a target fork proves it needs a separately compiled artifact.
 
-- **use-legacy-supremeexpansion-item-id** - Indication use compatibily old item from addon SupremeExpanssion (default: false)
-- **enable-generators** - Indication whether to enable the power generators (default: true)
-- **limit-production-generators** - To reduce the efficiency of generators (factor 5x) (default: false)
-- **delay-time-valid-generators** - Configuration for validation waiting time if a generator must be turned off, due to the change of nearby blocks (default: 600)
-- **enable-quarry** - Indication whether to enable the quarry machine (default: true)
-- **limit-production-quarry** - To reduce quarry production (hard mode 50% failure) (default: false)
-- **custom-ticker-delay** - To change the quarry production delay (default: 2)
-- **base-time-virtual-garden** - To change the Virtual Garden base processing time (default: 15)
-- **base-time-virtual-aquarium** - To change the Virtual Aquarium base processing time (default: 15)
-- **base-time-mob-collector** - To change the Mob Collector base processing time (default: 15)
-- **base-time-tech-generator** - To change the Tech Generator base processing time (default: 1800)
-- **tech-generator-max-amount** - To change the Tech Generator base result item amount (default: 64)
-- **machine-max-attempt-consumed** - To change the Electric Machines max attempt consumed item retry (default: 30)
-- **mob-tech-enable-bee** - Indication whether to enable the Bee in Mob Tech (default: true)
-- **mob-tech-enable-iron-golem** - Indication whether to enable the Iron Golem in Mob Tech (default: true)
-- **mob-tech-enable-zombie** - Indication whether to enable the Zombie in Mob Tech (default: true)
-- **quarry-custom-output** - Can be adjusted all item productions in Quarry
-- **enable-weapons** - Indication whether to enable the weapons (default: true)
-- **enable-tools** - Indication whether to enable the tools (default: true)
-- **enable-armor** - Indication whether to enable the armor (default: true)
-- **enable-tech** - Indication whether to enable new machine and resource to clonnig item (default: true)
-- **supreme-enchant** - Indication Enchantment of the gear and tools
-- **supreme-effects** - Indication Effects of the gear
-- **power-section** - Customizable Capacity, Buffer and Energy of the capacitor and generator
+## Installation
+
+1. Build the project or download the artifact from GitHub Actions.
+2. Stop the server.
+3. Back up the world and `plugins/Supreme` folder.
+4. Replace the existing Supreme jar in `plugins`.
+5. Keep the existing Supreme data/config folder for item-ID continuity.
+6. Start the server and review the log for registration errors.
+7. Test the checklist in [`COMPATIBILITY.md`](COMPATIBILITY.md) before replacing a production build.
+
+Do not run two Supreme jars at the same time.
+
+## Important compatibility notes
+
+- The plugin name remains `Supreme` and existing item IDs remain unchanged.
+- `api-version: 1.17` is intentionally retained in `plugin.yml` to avoid unnecessarily narrowing the Bukkit compatibility declaration; the actual compile target is modern Paper.
+- Slimefun 5 is not supported by this branch because it uses a rewritten API.
+- The United and Gugu profiles verify the legacy package surface used by Supreme; server testing is still required for behavior differences inside each fork.
+
+## Main content
+
+Supreme includes high-tier resources, magical components, tools, weapons, armor, electric fabricators, MobTech systems, collectors, virtual production machines, generators, capacitors, and configurable quarries.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the complete maintenance summary and [`COMPATIBILITY.md`](COMPATIBILITY.md) for the server test plan.
+
+## Credits
+
+Original Supreme developers and contributors include RelativoBR, Especttra, WilianSantosBR, and Mynothauro. This maintenance branch preserves the original project's license and gameplay lineage.

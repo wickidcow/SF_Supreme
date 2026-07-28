@@ -1,137 +1,144 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.github.relativobr</groupId>
-    <artifactId>Supreme</artifactId>
-    <version>MODIFIED</version>
+
+    <groupId>com.github.wickidcow</groupId>
+    <artifactId>Supreme-Legacy</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <name>Supreme-Legacy</name>
+    <description>Modernized Supreme addon for Slimefun Legacy, Gugu and United.</description>
 
     <properties>
-        <maven.compiler.source>16</maven.compiler.source>
-        <maven.compiler.target>16</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <author>RelativoBR</author>
+        <maven.compiler.release>21</maven.compiler.release>
+        <paper.version>1.21.11-R0.1-SNAPSHOT</paper.version>
+        <slimefun.groupId>com.github.slimefun</slimefun.groupId>
+        <slimefun.artifactId>Slimefun</slimefun.artifactId>
+        <slimefun.version>Legacy-SNAPSHOT</slimefun.version>
+        <lombok.version>1.18.44</lombok.version>
     </properties>
 
     <repositories>
         <repository>
-            <id>paper-repo</id>
-            <url>https://repo.destroystokyo.com/repository/maven-public/</url>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
-
         <repository>
-            <id>spigot-repo</id>
-            <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
-        </repository>
-
-        <repository>
-            <id>jitpack.io</id>
+            <id>jitpack</id>
             <url>https://jitpack.io</url>
         </repository>
     </repositories>
 
     <dependencies>
-
         <dependency>
-            <groupId>org.spigotmc</groupId>
-            <artifactId>spigot-api</artifactId>
-            <version>1.20.4-R0.1-SNAPSHOT</version>
+            <groupId>io.papermc.paper</groupId>
+            <artifactId>paper-api</artifactId>
+            <version>${paper.version}</version>
             <scope>provided</scope>
         </dependency>
-
         <dependency>
-            <groupId>com.github.Slimefun</groupId>
-            <artifactId>Slimefun4</artifactId>
-            <version>RC-37</version>
+            <groupId>${slimefun.groupId}</groupId>
+            <artifactId>${slimefun.artifactId}</artifactId>
+            <version>${slimefun.version}</version>
             <scope>provided</scope>
         </dependency>
-
         <dependency>
             <groupId>com.google.code.findbugs</groupId>
             <artifactId>jsr305</artifactId>
             <version>3.0.2</version>
-            <scope>compile</scope>
+            <scope>provided</scope>
         </dependency>
-
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.34</version>
+            <version>${lombok.version}</version>
             <scope>provided</scope>
         </dependency>
-
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-context</artifactId>
-            <version>6.1.10</version>
-        </dependency>
-
-      <!-- translation plugin -->
-        <dependency>
-            <groupId>net.guizhanss</groupId>
-            <artifactId>GuizhanLib</artifactId>
-            <version>0.9.0</version>
-            <scope>compile</scope>
-        </dependency>
-
     </dependencies>
 
-    <build>
-        <finalName>${project.name}</finalName>
-        <defaultGoal>clean package</defaultGoal>
-        <sourceDirectory>${basedir}/src/main/java</sourceDirectory>
+    <profiles>
+        <profile>
+            <id>legacy</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <slimefun.groupId>com.github.slimefun</slimefun.groupId>
+                <slimefun.artifactId>Slimefun</slimefun.artifactId>
+                <slimefun.version>Legacy-SNAPSHOT</slimefun.version>
+            </properties>
+        </profile>
+        <profile>
+            <id>gugu</id>
+            <properties>
+                <slimefun.groupId>com.github.SlimefunGuguProject</slimefun.groupId>
+                <slimefun.artifactId>Slimefun4</slimefun.artifactId>
+                <slimefun.version>2024.3.1</slimefun.version>
+            </properties>
+        </profile>
+        <profile>
+            <id>united</id>
+            <properties>
+                <slimefun.groupId>com.github.Slimefun-United.Slimefun-United</slimefun.groupId>
+                <slimefun.artifactId>slimefun-united</slimefun.artifactId>
+                <slimefun.version>dev-SNAPSHOT</slimefun.version>
+            </properties>
+        </profile>
+        <profile>
+            <id>official</id>
+            <properties>
+                <slimefun.groupId>com.github.Slimefun</slimefun.groupId>
+                <slimefun.artifactId>Slimefun4</slimefun.artifactId>
+                <slimefun.version>RC-37</slimefun.version>
+            </properties>
+        </profile>
+    </profiles>
 
+    <build>
+        <finalName>Supreme-Legacy</finalName>
         <resources>
             <resource>
-                <directory>${basedir}/src/main/resources</directory>
+                <directory>src/main/resources</directory>
                 <filtering>true</filtering>
             </resource>
             <resource>
-                <directory>${basedir}</directory>
+                <directory>${project.basedir}</directory>
                 <includes>
                     <include>LICENSE</include>
                 </includes>
             </resource>
         </resources>
-
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.0.0-M5</version>
-
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
                 <configuration>
-                    <junitArtifactName>org.junit.jupiter:junit-jupiter</junitArtifactName>
-                    <trimStackTrace>false</trimStackTrace>
+                    <release>${maven.compiler.release}</release>
+                    <encoding>${project.build.sourceEncoding}</encoding>
+                    <parameters>true</parameters>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.3.0</version>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.2</version>
                 <configuration>
-                    <minimizeJar>true</minimizeJar>
-                    <filters>
-                        <filter>
-                            <artifact>*:*</artifact>
-                            <excludes>
-                                <exclude>META-INF/*</exclude>
-                            </excludes>
-                        </filter>
-                    </filters>
+                    <archive>
+                        <manifestEntries>
+                            <Built-For>Paper 1.21.11 / 26.x</Built-For>
+                        </manifestEntries>
+                    </archive>
                 </configuration>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>
-
 </project>
