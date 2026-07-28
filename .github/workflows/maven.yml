@@ -50,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profile: [official, gugu, united]
+        profile: [official, gugu]
     steps:
       - uses: actions/checkout@v5
       - name: Set up Java 21
@@ -61,3 +61,32 @@ jobs:
           cache: maven
       - name: Compile against ${{ matrix.profile }} API
         run: mvn -B -P${{ matrix.profile }} -DskipTests clean package
+
+  compatibility-united:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Supreme Legacy
+        uses: actions/checkout@v5
+
+      - name: Checkout Slimefun United API
+        uses: actions/checkout@v5
+        with:
+          repository: Slimefun-United/Slimefun-United
+          ref: dev
+          path: slimefun-united
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Install Slimefun United API locally
+        working-directory: slimefun-united
+        run: |
+          chmod +x mvnw
+          ./mvnw -B -DskipTests -Dmaven.javadoc.skip=true install
+
+      - name: Compile Supreme against Slimefun United
+        run: mvn -B -Punited -DskipTests clean package
