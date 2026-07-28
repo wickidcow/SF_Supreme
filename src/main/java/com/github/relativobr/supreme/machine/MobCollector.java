@@ -245,7 +245,10 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
         new ItemStack(Material.MUTTON, this.getSpeed()), (n) -> n.getType() == EntityType.SHEEP));
     this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
         new ItemStack(Material.SNOWBALL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SNOWMAN));
+        (n) -> {
+          String entityType = n.getType().name();
+          return "SNOW_GOLEM".equals(entityType) || "SNOWMAN".equals(entityType);
+        }));
     this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
         new ItemStack(Material.IRON_INGOT, this.getSpeed()),
         (n) -> n.getType() == EntityType.IRON_GOLEM));
