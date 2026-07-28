@@ -1,5 +1,5 @@
 options:
-  auto-update: true
+  auto-update: false
   use-legacy-supremeexpansion-item-id: false
   lang: en-US
   custom-ticker-delay: 2
