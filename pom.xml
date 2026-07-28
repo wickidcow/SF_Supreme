@@ -27,6 +27,13 @@
         <repository>
             <id>jitpack</id>
             <url>https://jitpack.io</url>
+            <!-- JitPack does not publish Supreme's locally built API snapshots. -->
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
         </repository>
     </repositories>
 
