@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- Converted all player-facing consumption and generation rates from internal J/tick values to mathematically equivalent J/s values (×20).
 - Machine block-break null errors and unsafe state cleanup.
 - Input loss when a machine cannot place its full output.
 - Partial output insertion and output voiding.
@@ -22,7 +23,7 @@
 - Cargo failing to fill another empty slot for duplicate/same-item recipe inputs.
 - Tech Mutation same-item recipes and output-full reroll behavior.
 - Tech Robotic static recipe stack mutation and incomplete amount validation.
-- MobTech Collector charging 200 J/tick despite its 20 J/tick item description.
+- MobTech Collector charging 4,000 J/s internally despite its intended 400 J/s item description.
 - MobTech Collector consuming Empty MobTech twice per operation.
 - Mob Collector charging bottle/tool cost before a successful completion.
 - Mob Collector Tool III using 5,000 J instead of its intended 50,000 J capacity.

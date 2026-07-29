@@ -188,18 +188,18 @@ public class AbstractQuarry extends SlimefunItem implements EnergyNetComponent {
 
     int energyCharge = getCharge(block.getLocation());
     boolean enabled = isEnabled(block);
-    String powerPerTick = UtilEnergy.energyPowerPerTick(getEnergyConsumption());
+    String powerPerSecond = UtilEnergy.energyPowerPerSecond(getEnergyConsumption());
     String powerCharged = LoreBuilder.powerCharged(energyCharge, getCapacity());
     String infoSpeed = UtilEnergy.timePerItem(
         (getSupremeOptions().getCustomTickerDelay() * delaySpeed) / 2);
 
     if (energyCharge < getEnergyConsumption() || !enabled) {
       menu.addItem(InventoryRecipe.QUARRY_STATUS,
-          new CustomItemStack(Material.OBSIDIAN, ChatColor.RED + "NOT-ACTIVE", powerPerTick,
+          new CustomItemStack(Material.OBSIDIAN, ChatColor.RED + "NOT-ACTIVE", powerPerSecond,
               powerCharged, infoSpeed));
     } else {
       menu.addItem(InventoryRecipe.QUARRY_STATUS,
-          new CustomItemStack(Material.GLOWSTONE, ChatColor.GREEN + "ACTIVE", powerPerTick,
+          new CustomItemStack(Material.GLOWSTONE, ChatColor.GREEN + "ACTIVE", powerPerSecond,
               powerCharged, infoSpeed));
     }
     menu.addMenuClickHandler(InventoryRecipe.QUARRY_STATUS,

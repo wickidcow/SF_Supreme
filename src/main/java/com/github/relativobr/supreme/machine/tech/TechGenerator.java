@@ -58,7 +58,7 @@ public class TechGenerator extends SimpleItemContainerMachine implements Radioac
       + "materials.", "",
       LoreBuilder.radioactive(Radioactivity.LOW), "",
       LoreBuilder.machine(MachineTier.END_GAME, MachineType.MACHINE),
-      UtilEnergy.energyPowerPerTick(2000), "", "&3Supreme Machine");
+      UtilEnergy.energyPowerPerSecond(2000), "", "&3Supreme Machine");
 
   public static final ItemStack[] RECIPE_TECH_GENERATOR = {SupremeComponents.INDUCTIVE_MACHINE,
       SupremeComponents.SYNTHETIC_RUBY, SupremeComponents.INDUCTIVE_MACHINE,
@@ -330,7 +330,8 @@ public class TechGenerator extends SimpleItemContainerMachine implements Radioac
         }
       } else {
         final int downConsumption = checkDownConsumption(this.getEnergyConsumption(), inv);
-        invalidStatus(inv, "&cNo power on the machine (" + downConsumption + " J/tick)");
+        invalidStatus(inv, "&cNo power on the machine ("
+            + UtilEnergy.format(UtilEnergy.toPerSecond(downConsumption)) + " J/s)");
       }
     } else {
       invalidStatus(inv, "&cMachine time failure");

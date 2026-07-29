@@ -7,6 +7,8 @@ import javax.annotation.Nonnull;
 
 public class UtilEnergy {
 
+  public static final int TICKS_PER_SECOND = 20;
+
   private static final DecimalFormat FORMAT = new DecimalFormat("###,###,##0.00",
       DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 
@@ -26,13 +28,16 @@ public class UtilEnergy {
   }
 
   @Nonnull
-  public static String energyPowerPerSecond(int energy) {
-    return "&8⇨ &b⚡ &7" + format(energy) + " J/s";
+  public static String energyPowerPerSecond(int energyPerTick) {
+    return "&8⇨ &b⚡ &7" + format(toPerSecond(energyPerTick)) + " J/s";
   }
 
-  @Nonnull
-  public static String energyPowerPerTick(int energy) {
-    return "&8⇨ &b⚡ &7" + format(energy) + " J/tick";
+  /**
+   * Converts Slimefun's per-tick energy value to its equivalent per-second rate.
+   * Minecraft normally runs at 20 server ticks per second.
+   */
+  public static long toPerSecond(long energyPerTick) {
+    return energyPerTick * TICKS_PER_SECOND;
   }
 
   @Nonnull

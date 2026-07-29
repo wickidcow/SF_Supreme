@@ -7,7 +7,7 @@ Reviewed against the SlimefunGuguProject/Supreme issue tracker and the Supreme L
 - Issue #36: capacitor storage was incorrectly routed through the 16,000,000 J generator limiter.
   Capacitor capacities now use their configured values, including 100,000,000 J Thornium and
   1,600,000,000 J Supreme capacities.
-- Issue #30: machine lore that consumes power every server tick now reports J/tick rather than J/s.
+- Issue #30: player-facing power rates now convert the internal per-tick value to J/s using 20 ticks per second.
 - Cargo/Networks compatibility: the legacy item-transport overload now exposes machine input slots
   for insertion instead of returning no slots. The item-aware overload still provides preferred
   matching/empty-slot ordering.

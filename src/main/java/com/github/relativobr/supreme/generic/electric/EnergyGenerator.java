@@ -119,7 +119,7 @@ public final class EnergyGenerator extends MenuBlock implements SupremeEnergyPro
             Material.GREEN_STAINED_GLASS_PANE,
             "&aGeneration",
             "&7Type: &6" + type,
-            "&7Generating: &6" + UtilEnergy.format(generation) + " J/tick ",
+            "&7Generating: &6" + UtilEnergy.format(UtilEnergy.toPerSecond(generation)) + " J/s ",
             "&7Stored: &6" + UtilEnergy.format(getCharge(location)) + " J",
             "&7Capacity: &6" + UtilEnergy.format(buffer) + " J"));
       }

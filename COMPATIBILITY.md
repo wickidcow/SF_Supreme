@@ -38,7 +38,7 @@ Run this checklist on a backup/test server for every Slimefun implementation you
 - [ ] Tech Generator preserves its card and creates the full calculated output set.
 - [ ] Malformed/stale MobTech metadata does not stop the ticker.
 - [ ] MobTech Collector consumes exactly one Empty MobTech shell.
-- [ ] MobTech Collector consumes 20 J/tick for all configured tiers unless intentionally changed.
+- [ ] MobTech Collector consumes 400 J/s (20 J/tick internally) for all configured tiers unless intentionally changed.
 
 ## Collectors and virtual machines
 
