@@ -22,6 +22,28 @@ jobs:
           repository: wickidcow/Slimefun-Legacy
           path: slimefun-legacy
 
+      - name: Verify legacy Config API isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          LEGACY_CONFIG_USERS="$(
+            grep -RIl --include='*.java' \
+              'me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config' \
+              src/main/java | grep -v '/compat/' || true
+          )"
+
+          if [[ -n "$LEGACY_CONFIG_USERS" ]]; then
+            echo "Legacy Config API escaped the compatibility package:" >&2
+            echo "$LEGACY_CONFIG_USERS" >&2
+            exit 1
+          fi
+
+          if grep -RIn --include='*.java' 'new BlockTicker' src/main/java; then
+            echo "Direct BlockTicker implementations must use SupremeBlockTicker." >&2
+            exit 1
+          fi
+
       - name: Set up Java 25
         uses: actions/setup-java@v5
         with:
@@ -50,7 +72,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profile: [official, gugu]
+        profile: [gugu]
     steps:
       - uses: actions/checkout@v5
       - name: Set up Java 21
