@@ -1,6 +1,7 @@
 package com.github.relativobr.supreme.setup;
 
 import static com.github.relativobr.supreme.Supreme.getSupremeOptions;
+import static com.github.relativobr.supreme.util.ItemUtil.getCapacitorCapacity;
 import static com.github.relativobr.supreme.util.ItemUtil.getValueGeneratorsWithLimit;
 
 import com.github.relativobr.supreme.generic.electric.EnergyCapacitor;
@@ -103,23 +104,23 @@ public class SetupGenerators {
 
     new EnergyCapacitor(ItemGroups.ELECTRIC_CATEGORY, SupremeCapacitor.AURUM_CAPACITOR,
         SupremeCapacitor.MACHINE_AURUM_CAPACITOR,
-        getValueGeneratorsWithLimit(Supreme.getSupremePowerSection().getCapacitorAurumCapacity())).register(sup);
+        getCapacitorCapacity(Supreme.getSupremePowerSection().getCapacitorAurumCapacity())).register(sup);
 
     new EnergyCapacitor(ItemGroups.ELECTRIC_CATEGORY, SupremeCapacitor.TITANIUM_CAPACITOR,
         SupremeCapacitor.MACHINE_TITANIUM_CAPACITOR,
-        getValueGeneratorsWithLimit(Supreme.getSupremePowerSection().getCapacitorTitaniumCapacity())).register(sup);
+        getCapacitorCapacity(Supreme.getSupremePowerSection().getCapacitorTitaniumCapacity())).register(sup);
 
     new EnergyCapacitor(ItemGroups.ELECTRIC_CATEGORY, SupremeCapacitor.ADAMANTIUM_CAPACITOR,
         SupremeCapacitor.MACHINE_ADAMANTIUM_CAPACITOR,
-        getValueGeneratorsWithLimit(Supreme.getSupremePowerSection().getCapacitorAdamantiumCapacity())).register(sup);
+        getCapacitorCapacity(Supreme.getSupremePowerSection().getCapacitorAdamantiumCapacity())).register(sup);
 
     new EnergyCapacitor(ItemGroups.ELECTRIC_CATEGORY, SupremeCapacitor.THORNIUM_CAPACITOR,
         SupremeCapacitor.MACHINE_THORNIUM_CAPACITOR,
-        getValueGeneratorsWithLimit(Supreme.getSupremePowerSection().getCapacitorThorniumCapacity())).register(sup);
+        getCapacitorCapacity(Supreme.getSupremePowerSection().getCapacitorThorniumCapacity())).register(sup);
 
     new EnergyCapacitor(ItemGroups.ELECTRIC_CATEGORY, SupremeCapacitor.SUPREME_CAPACITOR,
         SupremeCapacitor.MACHINE_SUPREME_CAPACITOR,
-        getValueGeneratorsWithLimit(Supreme.getSupremePowerSection().getCapacitorSupremeCapacity())).register(sup);
+        getCapacitorCapacity(Supreme.getSupremePowerSection().getCapacitorSupremeCapacity())).register(sup);
 
   }
 }

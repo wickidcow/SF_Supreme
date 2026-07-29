@@ -81,7 +81,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
       @Override
       public int[] getSlotsAccessedByItemTransport(ItemTransportFlow flow) {
-        return flow == ItemTransportFlow.WITHDRAW ? getOutputSlots() : new int[0];
+        return flow == ItemTransportFlow.WITHDRAW ? getOutputSlots() : getInputSlots();
       }
 
       @Override

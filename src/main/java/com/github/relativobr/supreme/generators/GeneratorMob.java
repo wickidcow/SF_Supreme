@@ -45,7 +45,7 @@ public class GeneratorMob extends AbstractEnergyProvider implements SupremeEnerg
       Material.COMPOSTER, false,
       LoreBuilder.machine(MachineTier.BASIC, MachineType.GENERATOR),
       UtilEnergy.energyBuffer(getValueGeneratorsWithLimit(GeneratorMob.BASIC_GENERATOR_MOB_BUFFER)),
-      UtilEnergy.energyPowerPerSecond(getValueGeneratorsWithLimit(GeneratorMob.BASIC_GENERATOR_MOB_ENERGY)));
+      UtilEnergy.energyPowerPerTick(getValueGeneratorsWithLimit(GeneratorMob.BASIC_GENERATOR_MOB_ENERGY)));
   public static final ItemStack[] RECIPE_GENERATOR_MOB_BASIC = new ItemStack[]{SlimefunItems.SMALL_CAPACITOR,
       SlimefunItems.SILICON, SlimefunItems.SMALL_CAPACITOR, SlimefunItems.ALUMINUM_INGOT, SlimefunItems.ELECTRIC_MOTOR,
       SlimefunItems.ALUMINUM_INGOT, SlimefunItems.SMALL_CAPACITOR, SlimefunItems.ALUMINUM_INGOT,
@@ -55,7 +55,7 @@ public class GeneratorMob extends AbstractEnergyProvider implements SupremeEnerg
       Material.COMPOSTER, false,
       LoreBuilder.machine(MachineTier.BASIC, MachineType.GENERATOR),
       UtilEnergy.energyBuffer(getValueGeneratorsWithLimit(GeneratorMob.MEDIUM_GENERATOR_MOB_BUFFER)),
-      UtilEnergy.energyPowerPerSecond(getValueGeneratorsWithLimit(GeneratorMob.MEDIUM_GENERATOR_MOB_ENERGY)));
+      UtilEnergy.energyPowerPerTick(getValueGeneratorsWithLimit(GeneratorMob.MEDIUM_GENERATOR_MOB_ENERGY)));
   public static final ItemStack[] RECIPE_GENERATOR_MOB_MEDIUM = new ItemStack[]{GeneratorMob.GENERATOR_MOB_BASIC,
       SlimefunItems.FERROSILICON, GeneratorMob.GENERATOR_MOB_BASIC, SlimefunItems.REINFORCED_PLATE,
       SupremeComponents.SYNTHETIC_RUBY, SlimefunItems.REINFORCED_PLATE, GeneratorMob.GENERATOR_MOB_BASIC,
@@ -65,7 +65,7 @@ public class GeneratorMob extends AbstractEnergyProvider implements SupremeEnerg
       Material.COMPOSTER, false,
       LoreBuilder.machine(MachineTier.BASIC, MachineType.GENERATOR),
       UtilEnergy.energyBuffer(getValueGeneratorsWithLimit(GeneratorMob.ADVANCED_GENERATOR_MOB_BUFFER)),
-      UtilEnergy.energyPowerPerSecond(getValueGeneratorsWithLimit(GeneratorMob.ADVANCED_GENERATOR_MOB_ENERGY)));
+      UtilEnergy.energyPowerPerTick(getValueGeneratorsWithLimit(GeneratorMob.ADVANCED_GENERATOR_MOB_ENERGY)));
   public static final ItemStack[] RECIPE_GENERATOR_MOB_ADVANCED = new ItemStack[]{GeneratorMob.GENERATOR_MOB_MEDIUM,
       SlimefunItems.CARBONADO, GeneratorMob.GENERATOR_MOB_MEDIUM, SlimefunItems.HEATING_COIL, SlimefunItems.PLUTONIUM,
       SlimefunItems.HEATING_COIL, GeneratorMob.GENERATOR_MOB_MEDIUM, SupremeComponents.INDUCTIVE_MACHINE,
@@ -137,8 +137,15 @@ public class GeneratorMob extends AbstractEnergyProvider implements SupremeEnerg
     return cachedMob.containsKey(p);
   }
 
-  private boolean isAnimalNearby(@Nonnull Location l, @Nullable UUID uuid) {
-    return uuid != null && Bukkit.getEntity(uuid) != null && l.distanceSquared(Bukkit.getEntity(uuid).getLocation()) <= Math.pow(mobRange, 2);
+  private boolean isAnimalNearby(@Nonnull Location location, @Nullable UUID uuid) {
+    if (uuid == null || location.getWorld() == null) {
+      return false;
+    }
+    Entity entity = Bukkit.getEntity(uuid);
+    return entity != null
+        && entity.isValid()
+        && entity.getWorld().equals(location.getWorld())
+        && location.distanceSquared(entity.getLocation()) <= (double) mobRange * mobRange;
   }
 
   @ParametersAreNonnullByDefault
@@ -146,8 +153,16 @@ public class GeneratorMob extends AbstractEnergyProvider implements SupremeEnerg
     return n instanceof Cow || n instanceof Sheep || n instanceof Pig;
   }
 
-  private UUID locateNearbyMob(@Nonnull Location l) {
-    return l.getWorld().getNearbyEntities(l, mobRange, mobRange, mobRange, this::isValidAnimal).stream().findFirst().map(Entity::getUniqueId).orElse(null);
+  private UUID locateNearbyMob(@Nonnull Location location) {
+    if (location.getWorld() == null) {
+      return null;
+    }
+    return location.getWorld()
+        .getNearbyEntities(location, mobRange, mobRange, mobRange, this::isValidAnimal)
+        .stream()
+        .findFirst()
+        .map(Entity::getUniqueId)
+        .orElse(null);
   }
 
   @ParametersAreNonnullByDefault

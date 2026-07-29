@@ -31,8 +31,17 @@ import static com.github.relativobr.supreme.util.CompatibilySupremeLegacy.getOld
 public class ItemUtil {
 
 
+    /** Applies the optional production limiter to generator output and buffers only. */
     public static int getValueGeneratorsWithLimit(int value) {
         return Math.min((getSupremeOptions().isLimitProductionGenerators() ? (value / 5) : value), 16000000);
+    }
+
+    /**
+     * Capacitor capacity is storage, not generator production, and must never be reduced by the
+     * production limiter or the historical 16 MJ generator ceiling.
+     */
+    public static int getCapacitorCapacity(int value) {
+        return Math.max(1, value);
     }
 
     public static SupremeQuarryOutput getOutputQuarry(@Nonnull SlimefunItemStack item) {
