@@ -9,7 +9,6 @@ Run this checklist on a backup/test server for every Slimefun implementation you
 | Slimefun Legacy | `legacy` | Primary artifact and primary testing target |
 | Slimefun Gugu | `gugu` | Legacy API packages; test localized/internal behavior |
 | Slimefun United | `united` | Legacy API packages; test fork-specific machine/storage behavior |
-| Original Slimefun 4 | `official` | API baseline, not the preferred modern server implementation |
 | Slimefun 5 | None | Ideas-only reference; rewritten API is intentionally unsupported |
 
 ## Startup
@@ -72,3 +71,10 @@ Run this checklist on a backup/test server for every Slimefun implementation you
 - [ ] Run at least one full restart, not only `/reload`.
 - [ ] Watch the log during chunk loading of areas containing old Supreme machines.
 - [ ] Test cargo input/output with the addons used on the production server.
+
+## SlimefunBlockData API bridge
+
+Supreme uses `SlimefunBlockData` as the shared primary ticker and generator-output API across
+Slimefun Legacy, Gugu and United. Deprecated `Config` signatures exist only inside the two
+classes in `com.github.relativobr.supreme.compat`, where they delegate to the same implementation.
+The much older official RC-37 API is not a supported target because it predates this storage API.

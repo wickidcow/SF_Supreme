@@ -1,5 +1,6 @@
 package com.github.relativobr.supreme.generators;
 
+import com.github.relativobr.supreme.compat.SupremeEnergyProvider;
 import com.github.relativobr.supreme.resource.SupremeComponents;
 import com.github.relativobr.supreme.util.ItemGroups;
 import com.github.relativobr.supreme.util.SupremeItemStack;
@@ -13,7 +14,6 @@ import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.AbstractEnergyProvider;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.blocks.BlockPosition;
 import io.github.thebusybiscuit.slimefun4.utils.LoreBuilder;
-import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -32,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static com.github.relativobr.supreme.util.ItemUtil.getValueGeneratorsWithLimit;
 
-public class GeneratorMob extends AbstractEnergyProvider {
+public class GeneratorMob extends AbstractEnergyProvider implements SupremeEnergyProvider {
 
   public static final int BASIC_GENERATOR_MOB_ENERGY = 50;
   public static final int BASIC_GENERATOR_MOB_BUFFER = 1000;
@@ -111,7 +111,7 @@ public class GeneratorMob extends AbstractEnergyProvider {
 
   @Override
   @ParametersAreNonnullByDefault
-  public int getGeneratedOutput(Location l, Config config) {
+  public int getSupremeGeneratedOutput(Location l) {
     return isAnimalNearby(l) ? getEnergyProduction() : 0;
   }
 

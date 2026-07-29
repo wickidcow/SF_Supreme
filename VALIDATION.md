@@ -9,7 +9,10 @@
 - Checked all Java sources for parser-level syntax diagnostics with Java 21.
 - Checked the source tree for removed Spring and external GuizhanLib imports.
 - Checked that the modified legacy Slimefun classes/methods referenced by the patch exist in the supplied Slimefun Legacy source.
+- Compiled the two compatibility adapters with Java 21 against API stubs where `Config` is marked for removal; the compile completed with zero warnings.
+- Confirmed all `Config` imports are isolated to `com.github.relativobr.supreme.compat`.
+- Confirmed no machine class directly creates an anonymous `BlockTicker`.
 
 ## Environment limitation
 
-A complete Maven/Gradle dependency build could not be executed in the artifact sandbox because outbound dependency downloads and the Gradle distribution host were unavailable. The included GitHub Actions workflow performs the authoritative build against Slimefun Legacy and compile checks against the other API targets.
+A complete dependency build could not be executed in the artifact sandbox because Maven is not preinstalled and outbound package resolution is unavailable. The included GitHub Actions workflow performs the authoritative build against Slimefun Legacy and compile checks against the other API targets.

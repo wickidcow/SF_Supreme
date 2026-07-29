@@ -1,19 +1,18 @@
 package com.github.relativobr.supreme.generic.electric;
 
 import com.github.relativobr.supreme.Supreme;
+import com.github.relativobr.supreme.compat.SupremeEnergyProvider;
 import com.github.relativobr.supreme.libs.guizhanlib.slimefun.machines.MenuBlock;
 import com.github.relativobr.supreme.util.UtilEnergy;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
-import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetProvider;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.blocks.BlockPosition;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nonnull;
-import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
@@ -24,7 +23,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
 
 /** Energy generator whose cached generation state is isolated per placed block. */
-public final class EnergyGenerator extends MenuBlock implements EnergyNetProvider {
+public final class EnergyGenerator extends MenuBlock implements SupremeEnergyProvider {
 
   private final Map<BlockPosition, Integer> generatedOutput = new ConcurrentHashMap<>();
   private final Map<BlockPosition, Integer> currentDelay = new ConcurrentHashMap<>();
@@ -87,7 +86,7 @@ public final class EnergyGenerator extends MenuBlock implements EnergyNetProvide
   }
 
   @Override
-  public int getGeneratedOutput(Location location, Config data) {
+  public int getSupremeGeneratedOutput(Location location) {
     if (location == null || location.getWorld() == null || type == null) {
       return 0;
     }

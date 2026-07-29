@@ -5,7 +5,7 @@
 ### Compatibility
 
 - Updated compile target to Paper 1.21.11 and Java 21 bytecode.
-- Added Maven profiles for Slimefun Legacy, Slimefun Gugu, Slimefun United, and original Slimefun 4 RC-37.
+- Added Maven profiles for Slimefun Legacy, Slimefun Gugu, and Slimefun United.
 - Added GitHub Actions builds for the primary Legacy artifact and API compatibility matrix.
 - Removed Spring and external GuizhanLib runtime requirements.
 - Embedded only the small localization/menu helper implementation Supreme uses.
@@ -41,3 +41,11 @@
 - Reserved inputs are tracked and returned on block break when processing did not finish.
 - Unexpected insertion leftovers are dropped at the machine instead of silently deleted.
 - Block/world/inventory/entity operations are kept on synchronized Slimefun tickers.
+
+### Cross-fork API cleanup
+
+- Moved all machine tickers to the `SlimefunBlockData` overload.
+- Centralized the deprecated `Config` ticker fallback in `SupremeBlockTicker`.
+- Moved generator output to the block-data overload through `SupremeEnergyProvider`.
+- Retained a single suppressed `Config` generator bridge for older Gugu/United dispatch paths.
+- Removed the obsolete official RC-37 CI target; supported targets are Slimefun Legacy, Gugu and United.

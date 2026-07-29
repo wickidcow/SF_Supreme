@@ -11,7 +11,6 @@ This branch keeps the original Supreme gameplay and item IDs while modernizing m
 | Slimefun Legacy | Primary | `legacy` (default) |
 | Slimefun Gugu | Supported API target | `gugu` |
 | Slimefun United | Supported API target | `united` |
-| Original Slimefun 4 RC-37 API | Compatibility baseline | `official` |
 
 - Target server API: Paper 1.21.11 / Paper 26.x
 - Source compatibility: Java 21
@@ -74,7 +73,6 @@ target/Supreme-Legacy.jar
 ### Other API checks
 
 ```bash
-mvn -Pofficial -DskipTests clean package
 mvn -Pgugu -DskipTests clean package
 mvn -Punited -DskipTests clean package
 ```

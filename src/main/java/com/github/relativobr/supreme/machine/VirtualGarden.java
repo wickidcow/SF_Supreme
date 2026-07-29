@@ -1,5 +1,6 @@
 package com.github.relativobr.supreme.machine;
 
+import com.github.relativobr.supreme.compat.SupremeBlockTicker;
 import com.github.relativobr.supreme.generic.machine.SimpleItemWithLargeContainerMachine;
 import com.github.relativobr.supreme.machine.recipe.VirtualGardenMachineRecipe;
 import com.github.relativobr.supreme.resource.SupremeComponents;
@@ -26,9 +27,7 @@ import java.util.Objects;
 import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
-import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
 import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.MachineRecipe;
-import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import io.github.thebusybiscuit.slimefun4.libraries.commons.lang.Validate;
@@ -110,15 +109,7 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
 
   @Override
   public void preRegister() {
-    this.addItemHandler(new BlockTicker() {
-      public void tick(Block b, SlimefunItem sf, Config data) {
-        VirtualGarden.this.tick(b);
-      }
-
-      public boolean isSynchronized() {
-        return true;
-      }
-    });
+    addItemHandler(new SupremeBlockTicker(true, this::tick));
   }
 
 

@@ -92,14 +92,6 @@
                 <slimefun.version>4.10-SNAPSHOT</slimefun.version>
             </properties>
         </profile>
-        <profile>
-            <id>official</id>
-            <properties>
-                <slimefun.groupId>com.github.Slimefun</slimefun.groupId>
-                <slimefun.artifactId>Slimefun4</slimefun.artifactId>
-                <slimefun.version>RC-37</slimefun.version>
-            </properties>
-        </profile>
     </profiles>
 
     <build>

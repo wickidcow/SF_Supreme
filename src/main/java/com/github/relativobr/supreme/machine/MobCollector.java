@@ -2,6 +2,7 @@ package com.github.relativobr.supreme.machine;
 
 import static com.github.relativobr.supreme.Supreme.getSupremeOptions;
 
+import com.github.relativobr.supreme.compat.SupremeBlockTicker;
 import com.github.relativobr.supreme.generic.machine.SimpleItemWithLargeContainerMachine;
 import com.github.relativobr.supreme.machine.recipe.MobCollectorMachineRecipe;
 import com.github.relativobr.supreme.resource.SupremeComponents;
@@ -28,9 +29,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
-import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
 import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.MachineRecipe;
-import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.DyeColor;
@@ -281,15 +280,7 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
 
   @Override
   public void preRegister() {
-    this.addItemHandler(new BlockTicker() {
-      public void tick(Block b, SlimefunItem sf, Config data) {
-        MobCollector.this.tick(b);
-      }
-
-      public boolean isSynchronized() {
-        return true;
-      }
-    });
+    addItemHandler(new SupremeBlockTicker(true, this::tick));
   }
 
   @Nonnull

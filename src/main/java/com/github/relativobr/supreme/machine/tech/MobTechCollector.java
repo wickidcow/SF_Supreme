@@ -1,5 +1,6 @@
 package com.github.relativobr.supreme.machine.tech;
 
+import com.github.relativobr.supreme.compat.SupremeBlockTicker;
 import com.github.relativobr.supreme.generic.machine.SimpleItemWithLargeContainerMachine;
 import com.github.relativobr.supreme.Supreme;
 import com.github.relativobr.supreme.tools.MobCollectorTools;
@@ -30,9 +31,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
-import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
 import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.MachineRecipe;
-import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import io.github.thebusybiscuit.slimefun4.libraries.commons.lang.Validate;
 import org.bukkit.Material;
@@ -115,15 +114,7 @@ public class MobTechCollector extends SimpleItemWithLargeContainerMachine {
 
   @Override
   public void preRegister() {
-    this.addItemHandler(new BlockTicker() {
-      public void tick(Block b, SlimefunItem sf, Config data) {
-        MobTechCollector.this.tick(b);
-      }
-
-      public boolean isSynchronized() {
-        return true;
-      }
-    });
+    addItemHandler(new SupremeBlockTicker(true, this::tick));
   }
 
   @Nonnull

@@ -1,5 +1,6 @@
 package com.github.relativobr.supreme.machine.tech;
 
+import com.github.relativobr.supreme.compat.SupremeBlockTicker;
 import com.github.relativobr.supreme.Supreme;
 import com.github.relativobr.supreme.generic.machine.SimpleItemContainerMachine;
 import com.github.relativobr.supreme.generic.recipe.AbstractItemRecipe;
@@ -26,10 +27,8 @@ import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
 import io.github.thebusybiscuit.slimefun4.utils.LoreBuilder;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
-import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ChestMenu;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ClickAction;
-import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
@@ -197,16 +196,7 @@ public class TechGenerator extends SimpleItemContainerMachine implements Radioac
 
   @Override
   public void preRegister() {
-    this.addItemHandler(new BlockTicker() {
-      @Override
-      public void tick(Block b, SlimefunItem sf, Config data) {
-        TechGenerator.this.tick(b);
-      }
-
-      public boolean isSynchronized() {
-        return true;
-      }
-    });
+    addItemHandler(new SupremeBlockTicker(true, this::tick));
   }
 
   public void tick(Block b) {

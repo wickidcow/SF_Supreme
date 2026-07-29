@@ -2,6 +2,7 @@ package com.github.relativobr.supreme.machine;
 
 import static com.github.relativobr.supreme.Supreme.getSupremeOptions;
 
+import com.github.relativobr.supreme.compat.SupremeBlockTicker;
 import com.github.relativobr.supreme.generic.recipe.InventoryRecipe;
 import com.github.relativobr.supreme.util.ItemUtil;
 import com.github.relativobr.supreme.util.SupremeQuarryOutput;
@@ -32,9 +33,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
-import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ChestMenu;
-import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -79,17 +78,7 @@ public class AbstractQuarry extends SlimefunItem implements EnergyNetComponent {
 
   @Override
   public void preRegister() {
-    addItemHandler(new BlockTicker() {
-      @Override
-      public void tick(Block b, SlimefunItem sf, Config data) {
-        AbstractQuarry.this.tick(b);
-      }
-
-      @Override
-      public boolean isSynchronized() {
-        return true;
-      }
-    });
+    addItemHandler(new SupremeBlockTicker(true, this::tick));
   }
 
   private void tick(Block b) {

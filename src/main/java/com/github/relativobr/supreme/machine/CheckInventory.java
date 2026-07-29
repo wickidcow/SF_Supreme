@@ -1,5 +1,6 @@
 package com.github.relativobr.supreme.machine;
 
+import com.github.relativobr.supreme.compat.SupremeBlockTicker;
 import com.github.relativobr.supreme.Supreme;
 import com.github.relativobr.supreme.resource.SupremeComponents;
 import com.github.relativobr.supreme.util.ItemGroups;
@@ -25,9 +26,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 import lombok.Getter;
 import lombok.Setter;
-import me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config;
 import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.interfaces.InventoryBlock;
-import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
@@ -100,19 +99,7 @@ public class CheckInventory extends SlimefunItem implements InventoryBlock {
 
   @Override
   public void preRegister() {
-    addItemHandler(new BlockTicker() {
-
-      @Override
-      public void tick(Block b, SlimefunItem sf, Config data) {
-        CheckInventory.this.tick(b);
-      }
-
-      @Override
-      public boolean isSynchronized() {
-        return true;
-      }
-
-    });
+    addItemHandler(new SupremeBlockTicker(true, this::tick));
   }
 
   private void tick(Block b) {
