@@ -10,6 +10,9 @@ on:
 permissions:
   contents: write
 
+env:
+  LEGACY_ARTIFACT_VERSION: "1.0.0"
+
 jobs:
   build-legacy:
     runs-on: ubuntu-latest
@@ -61,20 +64,21 @@ jobs:
       - name: Build Supreme against Slimefun Legacy
         run: mvn -B -Plegacy clean verify
 
-      - name: Stage SF_Supreme.jar
+      - name: Stage versioned Legacy JAR
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp target/Supreme-Legacy.jar dist/SF_Supreme.jar
-          test -s dist/SF_Supreme.jar
-          sha256sum dist/SF_Supreme.jar
+          OUTPUT="dist/SF_Supreme_Legacy_v${LEGACY_ARTIFACT_VERSION}.jar"
+          cp target/Supreme-Legacy.jar "$OUTPUT"
+          test -s "$OUTPUT"
+          sha256sum "$OUTPUT"
 
-      - name: Upload SF_Supreme.jar
-        uses: actions/upload-artifact@v4
+      - name: Upload direct versioned Legacy JAR
+        uses: actions/upload-artifact@v7
         with:
-          name: SF_Supreme
-          path: dist/SF_Supreme.jar
+          path: dist/SF_Supreme_Legacy_v${{ env.LEGACY_ARTIFACT_VERSION }}.jar
+          archive: false
           if-no-files-found: error
 
       - name: Publish direct JAR release asset
@@ -84,7 +88,7 @@ jobs:
         shell: bash
         run: |
           TAG="$GITHUB_REF_NAME"
-          JAR="dist/SF_Supreme.jar"
+          JAR="dist/SF_Supreme_Legacy_v${LEGACY_ARTIFACT_VERSION}.jar"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
