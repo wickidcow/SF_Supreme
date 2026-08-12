@@ -1,109 +1,89 @@
-# Supreme Legacy
+<div align="center">
 
-A maintained, English-first Supreme fork for modern Paper servers and the Slimefun 4-compatible API family.
+# 👑⚙️ Supreme — Slimefun Legacy
 
-This branch keeps the original Supreme gameplay and item IDs while modernizing machine safety, dependency handling, and cross-fork build support. Slimefun 5 was reviewed only for implementation ideas because its API is a rewrite and is not a runtime target for this branch.
+**High-tier resources, machines, MobTech, collectors, generators, quarries, tools, weapons, and armor.**
 
-## Runtime targets
+![Slimefun Legacy](https://img.shields.io/badge/Slimefun-Legacy-6bd425?style=for-the-badge)
+![Paper 26.x](https://img.shields.io/badge/Paper-26.x-blue?style=for-the-badge)
+![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge)
+![Maintained for AlbionMC.com](https://img.shields.io/badge/Maintained%20for-albionmc.com-7b68ee?style=for-the-badge)
 
-| Slimefun implementation | Goal | Build profile |
-|---|---:|---|
-| Slimefun Legacy | Primary | `legacy` (default) |
-| Slimefun Gugu | Supported API target | `gugu` |
-| Slimefun United | Supported API target | `united` |
+</div>
 
-- Target server API: Paper 1.21.11 / Paper 26.x
-- Source compatibility: Java 21
-- Recommended runtime for the primary Legacy build: Java 25
-- Hard runtime dependency: `Slimefun`
-- No Spring runtime and no separate GuizhanLib runtime are required.
+> [!IMPORTANT]
+> Supreme Legacy is an **unofficial community maintenance fork** with Slimefun Legacy as its primary target. It is developed and maintained for use on **albionmc.com** while preserving Supreme's original gameplay, IDs, and project history.
 
-## What changed in this maintenance update
+## 👑 What does Supreme do?
 
-### Machine and inventory safety
+Supreme is a large late-game Slimefun addon built around advanced materials and automation. Its content includes:
 
-- Prevents recipes from starting when the complete output cannot fit.
-- Prevents partial output insertion and item voiding when output slots fill during processing.
-- Restores reserved recipe inputs when a machine is broken before completion.
-- Fixes null-sensitive machine break handling.
-- Fixes recipes whose required ingredients arrive over multiple cargo ticks.
-- Keeps incomplete recipe inputs visible and does not reserve them while the machine lacks power.
-- Lets cargo fill empty input slots when a recipe requires the same item in multiple slots.
-- Fixes Tech Mutation same-item automation and preserves one success roll while output is blocked.
-- Fixes Tech Robotic recipe mutation and validates the complete upgrade input amount.
-- Fixes MobTech Collector double consumption of Empty MobTech shells.
-- Commits Mob Collector bottle/tool cost only when its output is ready to be delivered.
-- Corrects Mob Collector Tool III to its intended 50,000 J charge capacity.
-- Isolates processing state per placed block for collectors, gardens, aquariums, quarries, and generators.
+- high-tier resources and magical components;
+- tools, weapons, and armor;
+- electric fabricators and processing machines;
+- MobTech systems and collectors;
+- virtual production machines;
+- generators and capacitors;
+- configurable quarries;
+- advanced crafting/progression systems.
 
-### Modern server compatibility
+## 🛡️ Slimefun Legacy maintenance
 
-- Uses Paper 1.21.11 as the compile API.
-- Replaces removed direct enchantment constants with namespaced lookups.
-- Handles the old/new happy-villager particle name safely.
-- Makes block/entity/inventory access synchronous where Bukkit state is touched.
-- Supports any Bukkit `InventoryHolder` below a quarry instead of only a narrow container list.
-- Persists quarry enabled state per placed quarry instead of sharing one global toggle.
-- Prevents generator output caches and delay counters from leaking between placed generators.
+This branch keeps Supreme's established item IDs and gameplay while modernizing machine safety, dependency handling, and server compatibility.
 
-### Dependency cleanup
+Important maintenance work includes:
 
-- Removes inert Spring `@Async` annotations and the Spring dependency.
-- Vendors the small localization/menu helper subset Supreme actually uses.
-- Removes the hard compile/runtime dependency on external GuizhanLib variants.
-- Disables the original upstream Dev-channel auto-updater so it cannot overwrite the maintained fork.
-- Keeps the plugin package isolated from Slimefun's own shaded libraries.
+- recipes start only when their complete output can fit;
+- blocked outputs do not silently void items;
+- reserved inputs can be restored when a machine is broken before completion;
+- safer null-sensitive break handling;
+- fixes for recipes whose inputs arrive over multiple Cargo ticks;
+- no input reservation while a machine lacks power;
+- safer same-item Cargo filling and Tech Mutation handling;
+- MobTech consumption/accounting fixes;
+- per-placed-block processing state for collectors, gardens, aquariums, quarries, and generators;
+- modern Paper material, enchantment, particle, inventory, and entity compatibility;
+- quarry state persistence and safer inventory-holder support;
+- removal of inert Spring annotations/dependency;
+- removal of unnecessary external GuizhanLib runtime reliance;
+- disabling the original development-channel self-updater so it cannot overwrite the maintained build.
 
-## Building
+See `CHANGELOG.md` and `COMPATIBILITY.md` for deeper maintenance and testing details.
 
-### Slimefun Legacy (default)
+## ❤️ Credits & project lineage
 
-The GitHub workflow checks out `wickidcow/Slimefun-Legacy`, publishes its API to the runner's local Maven repository, and then builds Supreme:
+Supreme has been built by multiple developers over its history, and this fork preserves their credit:
 
-```bash
-mvn -Plegacy clean verify
-```
+- **RelativoBR** — original Supreme development and project history.
+- **Especttra** — original Supreme development/contributions.
+- **WilianSantosBR** — original Supreme development/contributions.
+- **Mynothauro** — original Supreme development/contributions.
+- **Slimefun-Addon-Community/Supreme** — community upstream repository and the immediate source of this fork.
+- **Supreme and Slimefun community contributors** — fixes, APIs, testing, and maintenance over the project's lifetime.
+- **wickidcow / Slimefun Legacy** — current machine-safety, compatibility, and preservation work for modern servers and albionmc.com.
 
-Output:
+This fork is a maintenance continuation and does not claim authorship of the original Supreme project.
 
-```text
-target/Supreme-Legacy.jar
-```
+## 📜 GNU General Public License v3.0
 
-### Other API checks
+Supreme is licensed under the **GNU General Public License v3.0 (GPLv3)**. See `LICENSE` for the complete terms.
 
-```bash
-mvn -Pgugu -DskipTests clean package
-mvn -Punited -DskipTests clean package
-```
+If you distribute Supreme or a modified GPL-covered version, comply with GPLv3, including preserving applicable notices, identifying modified versions, licensing covered modified source under GPLv3, and making the required Corresponding Source available when distributing object code.
 
-These profiles are compile-compatibility checks. Distribute the normal Legacy-built jar unless a target fork proves it needs a separately compiled artifact.
+The software is provided **without warranty** as described by GPLv3.
 
-## Installation
+## ⚖️ Independence & trademark notice
 
-1. Build the project or download the artifact from GitHub Actions.
-2. Stop the server.
-3. Back up the world and `plugins/Supreme` folder.
-4. Replace the existing Supreme jar in `plugins`.
-5. Keep the existing Supreme data/config folder for item-ID continuity.
-6. Start the server and review the log for registration errors.
-7. Test the checklist in [`COMPATIBILITY.md`](COMPATIBILITY.md) before replacing a production build.
+**NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.**
 
-Do not run two Supreme jars at the same time.
+Supreme, Slimefun Legacy, and this maintenance fork are independent community projects. They are not sponsored, endorsed, approved, or operated by Mojang Studios or Microsoft. Minecraft-related names, brands, and assets remain the property of their respective rights holders.
 
-## Important compatibility notes
+This repository is also not represented as an official release of RelativoBR, Especttra, WilianSantosBR, Mynothauro, the Slimefun-Addon-Community, or the original Slimefun developers unless explicitly stated by those parties.
 
-- The plugin name remains `Supreme` and existing item IDs remain unchanged.
-- `api-version: 1.17` is intentionally retained in `plugin.yml` to avoid unnecessarily narrowing the Bukkit compatibility declaration; the actual compile target is modern Paper.
-- Slimefun 5 is not supported by this branch because it uses a rewritten API.
-- The United and Gugu profiles verify the legacy package surface used by Supreme; server testing is still required for behavior differences inside each fork.
+---
 
-## Main content
+<div align="center">
 
-Supreme includes high-tier resources, magical components, tools, weapons, armor, electric fabricators, MobTech systems, collectors, virtual production machines, generators, capacitors, and configurable quarries.
+**👑 End-game Slimefun deserves Supreme machinery. ⚙️**
 
-See [`CHANGELOG.md`](CHANGELOG.md) for the complete maintenance summary and [`COMPATIBILITY.md`](COMPATIBILITY.md) for the server test plan.
-
-## Credits
-
-Original Supreme developers and contributors include RelativoBR, Especttra, WilianSantosBR, and Mynothauro. This maintenance branch preserves the original project's license and gameplay lineage.
+</div>
