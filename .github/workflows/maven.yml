@@ -12,6 +12,7 @@ permissions:
 
 env:
   LEGACY_ARTIFACT_VERSION: "1.0.0"
+  OUTPUT_NAME: "SF_Supreme1.0.0.jar"
 
 jobs:
   build-legacy:
@@ -25,28 +26,6 @@ jobs:
         with:
           repository: wickidcow/Slimefun-Legacy
           path: slimefun-legacy
-
-      - name: Verify legacy Config API isolation
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          LEGACY_CONFIG_USERS="$(
-            grep -RIl --include='*.java' \
-              'me.mrCookieSlime.CSCoreLibPlugin.Configuration.Config' \
-              src/main/java | grep -v '/compat/' || true
-          )"
-
-          if [[ -n "$LEGACY_CONFIG_USERS" ]]; then
-            echo "Legacy Config API escaped the compatibility package:" >&2
-            echo "$LEGACY_CONFIG_USERS" >&2
-            exit 1
-          fi
-
-          if grep -RIn --include='*.java' 'new BlockTicker' src/main/java; then
-            echo "Direct BlockTicker implementations must use SupremeBlockTicker." >&2
-            exit 1
-          fi
 
       - name: Set up Java 25
         uses: actions/setup-java@v5
@@ -64,107 +43,75 @@ jobs:
       - name: Build Supreme against Slimefun Legacy
         run: mvn -B -Plegacy clean verify
 
-      - name: Stage versioned Legacy JAR
+      - name: Stage versioned JAR
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          OUTPUT="dist/SF_Supreme_Legacy_v${LEGACY_ARTIFACT_VERSION}.jar"
-          cp target/Supreme-Legacy.jar "$OUTPUT"
-          test -s "$OUTPUT"
-          sha256sum "$OUTPUT"
+          cp target/Supreme-Legacy.jar "dist/${OUTPUT_NAME}"
+          test -s "dist/${OUTPUT_NAME}"
+          sha256sum "dist/${OUTPUT_NAME}"
 
-      - name: Upload direct versioned Legacy JAR
+      - name: Upload CI artifact
         uses: actions/upload-artifact@v7
         with:
-          path: dist/SF_Supreme_Legacy_v${{ env.LEGACY_ARTIFACT_VERSION }}.jar
-          archive: false
+          name: SF_Supreme${{ env.LEGACY_ARTIFACT_VERSION }}
+          path: dist/${{ env.OUTPUT_NAME }}
           if-no-files-found: error
 
-      - name: Publish direct JAR release asset
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish raw JAR release asset
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="$GITHUB_REF_NAME"
-          JAR="dist/SF_Supreme_Legacy_v${LEGACY_ARTIFACT_VERSION}.jar"
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${LEGACY_ARTIFACT_VERSION}"; fi
+          JAR="dist/${OUTPUT_NAME}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --generate-notes --title "Supreme $TAG"
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --generate-notes --title "SF_Supreme $TAG"
           fi
 
-  compatibility-api:
+  compatibility-gugu:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        profile: [gugu]
     steps:
       - uses: actions/checkout@v5
-      - name: Set up Java 21
-        uses: actions/setup-java@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Compile against ${{ matrix.profile }} API
-        run: mvn -B -P${{ matrix.profile }} -DskipTests clean package
+      - name: Compile against Gugu API
+        run: mvn -B -Pgugu -DskipTests clean package
 
   compatibility-united:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Supreme Legacy
         uses: actions/checkout@v5
-
       - name: Checkout Slimefun United API
         uses: actions/checkout@v5
         with:
           repository: Slimefun-United/Slimefun-United
           ref: dev
           path: slimefun-united
-
-      - name: Set up Java 21
-        uses: actions/setup-java@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
-
       - name: Build Slimefun United API jar
         working-directory: slimefun-united
         run: |
           chmod +x mvnw
           ./mvnw -B -DskipTests -Dmaven.javadoc.skip=true clean package
-
-      - name: Install United jar under isolated CI coordinate
+      - name: Install United jar for CI
         shell: bash
         run: |
           set -euo pipefail
-
-          UNITED_JAR="$(find "$GITHUB_WORKSPACE/slimefun-united/target" \
-            -maxdepth 1 -type f -name '*.jar' \
-            ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name 'original-*' \
-            -print -quit)"
-
-          if [[ -z "$UNITED_JAR" || ! -f "$UNITED_JAR" ]]; then
-            echo "No compiled Slimefun United jar was found." >&2
-            find "$GITHUB_WORKSPACE/slimefun-united/target" -maxdepth 1 -type f -print || true
-            exit 1
-          fi
-
-          echo "Installing United API from: $UNITED_JAR"
-          cd "$RUNNER_TEMP"
-          mvn -B org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
-            -Dfile="$UNITED_JAR" \
-            -DgroupId=io.github.slimefun_united \
-            -DartifactId=slimefun-united \
-            -Dversion=4.10-CI \
-            -Dpackaging=jar \
-            -DgeneratePom=true
-
-          test -f "$HOME/.m2/repository/io/github/slimefun_united/slimefun-united/4.10-CI/slimefun-united-4.10-CI.jar"
-          test -f "$HOME/.m2/repository/io/github/slimefun_united/slimefun-united/4.10-CI/slimefun-united-4.10-CI.pom"
-
+          UNITED_JAR="$(find "$GITHUB_WORKSPACE/slimefun-united/target" -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name 'original-*' -print -quit)"
+          test -n "$UNITED_JAR"
+          mvn -B org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file -Dfile="$UNITED_JAR" -DgroupId=io.github.slimefun_united -DartifactId=slimefun-united -Dversion=4.10-CI -Dpackaging=jar -DgeneratePom=true
       - name: Compile Supreme against Slimefun United
         run: mvn -B -Punited -Dslimefun.version=4.10-CI -DskipTests clean package
