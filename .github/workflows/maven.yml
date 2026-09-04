@@ -11,8 +11,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.0"
-  OUTPUT_NAME: "SF_Supreme1.0.0.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.1"
+  OUTPUT_NAME: "SF_Supreme1.0.1.jar"
 
 jobs:
   build-legacy:
@@ -68,10 +68,11 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${LEGACY_ARTIFACT_VERSION}"; fi
           JAR="dist/${OUTPUT_NAME}"
+          NOTES="Supreme Tech Generator performance hotfix. Caches recipe matching and stable upgrade/output plans, avoids rebuilding identical status items every tick, reuses MobTech metadata keys, removes duplicate per-tick upgrade scans, and makes output-capacity simulation allocation-light without changing recipes, output rules, processing speed, or energy behavior."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --generate-notes --title "SF_Supreme $TAG"
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_Supreme $TAG" --notes "$NOTES"
           fi
 
   compatibility-gugu:
