@@ -1,8 +1,6 @@
 package com.github.relativobr.supreme.util;
 
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
-import java.util.ArrayList;
-import java.util.List;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Material;
@@ -15,43 +13,45 @@ public final class SupremeInventoryUtils {
 
   @ParametersAreNonnullByDefault
   public static boolean canFit(BlockMenu menu, int[] slots, ItemStack... outputs) {
-    List<ItemStack> simulated = new ArrayList<>(slots.length);
-    for (int slot : slots) {
-      ItemStack current = menu.getItemInSlot(slot);
-      simulated.add(current == null ? null : current.clone());
+    ItemStack[] simulatedItems = new ItemStack[slots.length];
+    int[] simulatedAmounts = new int[slots.length];
+
+    for (int i = 0; i < slots.length; i++) {
+      ItemStack current = menu.getItemInSlot(slots[i]);
+      if (current != null && current.getType() != Material.AIR) {
+        simulatedItems[i] = current;
+        simulatedAmounts[i] = current.getAmount();
+      }
     }
 
     for (ItemStack output : outputs) {
       if (output == null || output.getType() == Material.AIR || output.getAmount() <= 0) {
         continue;
       }
-      int remaining = output.getAmount();
 
-      for (ItemStack current : simulated) {
-        if (current == null || current.getType() == Material.AIR) {
+      int remaining = output.getAmount();
+      for (int i = 0; i < simulatedItems.length && remaining > 0; i++) {
+        ItemStack current = simulatedItems[i];
+        if (current == null || !SlimefunUtils.isItemSimilar(current, output, false, false)) {
           continue;
         }
-        if (SlimefunUtils.isItemSimilar(current, output, false, false)) {
-          int capacity = Math.max(0, Math.min(current.getMaxStackSize(), output.getMaxStackSize())
-              - current.getAmount());
-          int moved = Math.min(capacity, remaining);
-          current.setAmount(current.getAmount() + moved);
-          remaining -= moved;
-          if (remaining == 0) {
-            break;
-          }
-        }
+
+        int capacity = Math.max(0,
+            Math.min(current.getMaxStackSize(), output.getMaxStackSize()) - simulatedAmounts[i]);
+        int moved = Math.min(capacity, remaining);
+        simulatedAmounts[i] += moved;
+        remaining -= moved;
       }
 
-      for (int i = 0; remaining > 0 && i < simulated.size(); i++) {
-        ItemStack current = simulated.get(i);
-        if (current == null || current.getType() == Material.AIR) {
-          int moved = Math.min(output.getMaxStackSize(), remaining);
-          ItemStack inserted = output.clone();
-          inserted.setAmount(moved);
-          simulated.set(i, inserted);
-          remaining -= moved;
+      for (int i = 0; i < simulatedItems.length && remaining > 0; i++) {
+        if (simulatedItems[i] != null) {
+          continue;
         }
+
+        int moved = Math.min(output.getMaxStackSize(), remaining);
+        simulatedItems[i] = output;
+        simulatedAmounts[i] = moved;
+        remaining -= moved;
       }
 
       if (remaining > 0) {
