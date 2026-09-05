@@ -90,27 +90,160 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         if (flow == ItemTransportFlow.WITHDRAW) {
           return getOutputSlots();
         }
-
-        // Include empty slots even when the same ingredient is already present. The old behavior
-        // exposed only matching occupied slots, which prevented cargo from filling recipes that
-        // require the same item in more than one input slot.
-        List<Integer> matching = new LinkedList<>();
-        List<Integer> empty = new LinkedList<>();
-        for (int slot : getInputSlots()) {
-          ItemStack stack = menu.getItemInSlot(slot);
-          if (stack == null || stack.getType().isAir()) {
-            empty.add(slot);
-          } else if (SlimefunUtils.isItemSimilar(stack, item, false, true)
-              && stack.getAmount() < stack.getMaxStackSize()) {
-            matching.add(slot);
-          }
-        }
-
-        matching.sort(Comparator.comparingInt(slot -> menu.getItemInSlot(slot).getAmount()));
-        matching.addAll(empty);
-        return matching.stream().mapToInt(Integer::intValue).toArray();
+        return getRecipeAwareInsertSlots(menu, item);
       }
     };
+  }
+
+  /**
+   * Limits automated insertion to the number of physical input slots the selected recipe needs for
+   * the incoming ingredient. This prevents cargo systems from spreading several ingredients evenly
+   * across every empty slot while the machine is intentionally waiting for the complete recipe.
+   */
+  private int[] getRecipeAwareInsertSlots(DirtyChestMenu menu, ItemStack item) {
+    if (item == null || item.getType().isAir()) {
+      return new int[0];
+    }
+
+    // Preserve compatibility for any unusual GenericMachine that has not registered recipes yet.
+    if (machineRecipes.isEmpty()) {
+      return getInputSlots();
+    }
+
+    ItemStack[] selectedRecipe = findTransportRecipe(menu, item);
+    if (selectedRecipe == null) {
+      return new int[0];
+    }
+
+    Map<ItemStack, Integer> requiredItems = groupSimilarItems(selectedRecipe);
+    ItemStack requiredTemplate = null;
+    int requiredAmount = 0;
+    for (Map.Entry<ItemStack, Integer> entry : requiredItems.entrySet()) {
+      if (SlimefunUtils.isItemSimilar(entry.getKey(), item, false, false)) {
+        requiredTemplate = entry.getKey();
+        requiredAmount = entry.getValue();
+        break;
+      }
+    }
+
+    if (requiredTemplate == null || requiredAmount <= 0) {
+      return new int[0];
+    }
+
+    int maxStackSize = Math.max(1, requiredTemplate.getMaxStackSize());
+    int requiredSlotCount = Math.max(1, (requiredAmount + maxStackSize - 1) / maxStackSize);
+    List<Integer> matching = new LinkedList<>();
+    List<Integer> empty = new LinkedList<>();
+    int occupiedMatchingSlots = 0;
+    int firstMatchingSlot = -1;
+
+    for (int slot : getInputSlots()) {
+      ItemStack stack = menu.getItemInSlot(slot);
+      if (stack == null || stack.getType().isAir()) {
+        empty.add(slot);
+        continue;
+      }
+
+      if (!SlimefunUtils.isItemSimilar(stack, requiredTemplate, false, false)) {
+        continue;
+      }
+
+      occupiedMatchingSlots++;
+      if (firstMatchingSlot < 0) {
+        firstMatchingSlot = slot;
+      }
+      if (stack.getAmount() < stack.getMaxStackSize()) {
+        matching.add(slot);
+      }
+    }
+
+    // Fill fuller stacks first so cargo consolidates instead of spreading an ingredient evenly.
+    matching.sort((left, right) -> Integer.compare(
+        menu.getItemInSlot(right).getAmount(), menu.getItemInSlot(left).getAmount()));
+
+    int emptyAllowance = Math.max(0, requiredSlotCount - occupiedMatchingSlots);
+    for (int i = 0; i < Math.min(emptyAllowance, empty.size()); i++) {
+      matching.add(empty.get(i));
+    }
+
+    /*
+     * If this ingredient already occupies its full recipe slot allowance, expose one occupied slot
+     * as a transport sentinel. A full slot has zero capacity; a partial slot may accept harmless
+     * excess but cannot claim another physical slot. This also lets compatibility layers distinguish
+     * "recipe quota reached" from "no routing information available".
+     */
+    if (matching.isEmpty() && firstMatchingSlot >= 0) {
+      matching.add(firstMatchingSlot);
+    }
+
+    return matching.stream().mapToInt(Integer::intValue).toArray();
+  }
+
+  /**
+   * Selects the first recipe containing the incoming item that is compatible with everything already
+   * present in the machine. When several recipes are possible, prefer the one with the most distinct
+   * ingredients already represented in the input inventory, matching normal recipe selection behavior.
+   */
+  private ItemStack[] findTransportRecipe(DirtyChestMenu menu, ItemStack incoming) {
+    ItemStack[] bestRecipe = null;
+    int bestMatchedIngredients = -1;
+
+    for (AbstractItemRecipe recipe : machineRecipes) {
+      ItemStack[] input = recipe.getInputNotNull();
+      Map<ItemStack, Integer> requiredItems = groupSimilarItems(input);
+      if (!containsSimilar(requiredItems, incoming)) {
+        continue;
+      }
+
+      boolean compatible = true;
+      for (int slot : getInputSlots()) {
+        ItemStack existing = menu.getItemInSlot(slot);
+        if (existing == null || existing.getType().isAir()) {
+          continue;
+        }
+        if (!containsSimilar(requiredItems, existing)) {
+          compatible = false;
+          break;
+        }
+      }
+      if (!compatible) {
+        continue;
+      }
+
+      int matchedIngredients = 0;
+      for (ItemStack required : requiredItems.keySet()) {
+        if (containsInputItem(menu, required)) {
+          matchedIngredients++;
+        }
+      }
+
+      if (matchedIngredients > bestMatchedIngredients) {
+        bestRecipe = input;
+        bestMatchedIngredients = matchedIngredients;
+      }
+    }
+
+    return bestRecipe;
+  }
+
+  private boolean containsSimilar(Map<ItemStack, Integer> items, ItemStack target) {
+    for (ItemStack candidate : items.keySet()) {
+      if (SlimefunUtils.isItemSimilar(candidate, target, false, false)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean containsInputItem(DirtyChestMenu menu, ItemStack required) {
+    for (int slot : getInputSlots()) {
+      ItemStack existing = menu.getItemInSlot(slot);
+      if (existing != null && !existing.getType().isAir()
+          && SlimefunUtils.isItemSimilar(existing, required, false, false)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Nonnull
