@@ -1,5 +1,18 @@
 # Changelog
 
+## Supreme Legacy 1.0.2
+
+### Recipe & Machine Safety
+
+- Added safe Tech Generator output repair for legacy/corrupted overstacked slots.
+- Preserves every repaired item by splitting excess into legal stacks; overflow is only dropped at the machine when all Tech Generator output slots are full.
+- Clamped `tech-generator-max-amount` to the legal range of 1-64 and logs an explicit warning when an unsafe configured value is corrected.
+- Added a startup Recipe Doctor audit for Supreme's production-machine recipe sets.
+- Added `/supreme doctor recipes` for operators to re-run recipe diagnostics on demand.
+- Recipe Doctor checks missing inputs/outputs, invalid/AIR stacks, impossible physical input/output slot requirements, and ambiguous duplicate input signatures.
+- Registered `supreme.admin` as an operator-only diagnostics permission.
+- Kept existing recipe-aware cargo routing, delayed complete-input consumption, output-full pausing, Tech Generator generation-plan caching, recipes, processing rates, and energy behavior unchanged.
+
 ## Supreme Legacy 1.0.1
 
 ### Performance
