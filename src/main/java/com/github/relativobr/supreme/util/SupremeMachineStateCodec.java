@@ -65,6 +65,20 @@ public final class SupremeMachineStateCodec {
     }
   }
 
+  /** Lightweight progress checkpoint used while a recipe is actively processing. */
+  public static void saveProgress(Block block, int progress) {
+    if (block != null && hasState(block)) {
+      BlockStorage.addBlockInfo(block, KEY_PROGRESS, Integer.toString(Math.max(progress, 0)));
+    }
+  }
+
+  /** Lightweight wait-attempt checkpoint used while staged inputs are arriving. */
+  public static void saveAttempts(Block block, int attempts) {
+    if (block != null && hasState(block)) {
+      BlockStorage.addBlockInfo(block, KEY_ATTEMPTS, Integer.toString(Math.max(attempts, 0)));
+    }
+  }
+
   public static Optional<State> load(Block block) {
     if (block == null || !hasState(block)) {
       return Optional.empty();
