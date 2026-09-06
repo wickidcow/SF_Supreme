@@ -4,6 +4,7 @@ import static com.github.relativobr.supreme.Supreme.getSupremeOptions;
 
 import com.github.relativobr.supreme.Supreme;
 import com.github.relativobr.supreme.machine.tech.MobTechCollector;
+import com.github.relativobr.supreme.machine.tech.SafeTechGenerator;
 import com.github.relativobr.supreme.machine.tech.TechGenerator;
 import com.github.relativobr.supreme.machine.tech.TechMutation;
 import com.github.relativobr.supreme.machine.tech.TechRobotic;
@@ -69,7 +70,7 @@ public class SetupTechMachines {
           .setMachineIdentifier(TechRobotic.TECH_ROBOTIC.getItemId()).setCapacity(500)
           .setEnergyConsumption(500).register(sup);
 
-      new TechGenerator(TechGenerator.TECH_GENERATOR,
+      new SafeTechGenerator(TechGenerator.TECH_GENERATOR,
           TechGenerator.RECIPE_TECH_GENERATOR).setTimeProcess(
               supremeOptions.getBaseTimeTechGenerator())
           .setMachineIdentifier(TechGenerator.TECH_GENERATOR.getItemId()).setCapacity(40000)
