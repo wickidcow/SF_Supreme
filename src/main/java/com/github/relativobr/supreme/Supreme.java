@@ -6,19 +6,25 @@ import static com.github.relativobr.supreme.util.CompatibilySupremeLegacy.loadGe
 import static com.github.relativobr.supreme.util.CompatibilySupremeLegacy.loadGenerators;
 import static com.github.relativobr.supreme.util.CompatibilySupremeLegacy.loadMachines;
 
+import com.github.relativobr.supreme.command.SupremeCommand;
 import com.github.relativobr.supreme.setup.MainSetup;
 import com.github.relativobr.supreme.util.CompatibilySupremeLegacyItem;
 import com.github.relativobr.supreme.util.SupremeOptions;
 import com.github.relativobr.supreme.util.SupremePowerSection;
+import com.github.relativobr.supreme.util.SupremeRecipeDoctor;
 import io.github.thebusybiscuit.slimefun4.api.SlimefunAddon;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.config.Config;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class Supreme extends JavaPlugin implements SlimefunAddon {
+
+  private static final int MIN_TECH_GENERATOR_MAX_AMOUNT = 1;
+  private static final int MAX_TECH_GENERATOR_MAX_AMOUNT = 64;
 
   private static Supreme instance;
   private static SupremeOptions supremeOptions = null;
@@ -51,7 +57,9 @@ public class Supreme extends JavaPlugin implements SlimefunAddon {
                 .baseTimeVirtualAquarium(typeSection.getInt("base-time-virtual-aquarium", 15))
                 .baseTimeMobCollector(typeSection.getInt("base-time-mob-collector", 15))
                 .baseTimeTechGenerator(typeSection.getInt("base-time-tech-generator", 1800))
-                .maxAmountTechGenerator(typeSection.getInt("tech-generator-max-amount", 64))
+                .maxAmountTechGenerator(getClampedConfigValue(typeSection,
+                    "tech-generator-max-amount", 64,
+                    MIN_TECH_GENERATOR_MAX_AMOUNT, MAX_TECH_GENERATOR_MAX_AMOUNT))
                 .mobTechEnableBee(typeSection.getBoolean("mob-tech-enable-bee", true))
                 .mobTechEnableIronGolem(typeSection.getBoolean("mob-tech-enable-iron-golem", true))
                 .mobTechEnableZombie(typeSection.getBoolean("mob-tech-enable-zombie", true))
@@ -65,6 +73,24 @@ public class Supreme extends JavaPlugin implements SlimefunAddon {
       }
     }
     return supremeOptions;
+  }
+
+  private static int getClampedConfigValue(ConfigurationSection section, String path,
+      int defaultValue, int minimumValue, int maximumValue) {
+    long value = section.getLong(path, defaultValue);
+    if (value < minimumValue) {
+      inst().log(Level.WARNING,
+          "Config value \"" + path + "\" was too small (" + value + "), clamping to "
+              + minimumValue + ".");
+      return minimumValue;
+    }
+    if (value > maximumValue) {
+      inst().log(Level.WARNING,
+          "Config value \"" + path + "\" was too large (" + value + "), clamping to "
+              + maximumValue + ".");
+      return maximumValue;
+    }
+    return (int) value;
   }
 
   public static SupremePowerSection getSupremePowerSection() {
@@ -152,11 +178,9 @@ public class Supreme extends JavaPlugin implements SlimefunAddon {
           "The original Supreme auto-updater is disabled in Supreme Legacy. Use your fork's GitHub Actions/releases for updates.");
     }
 
-    // localization
     Supreme.inst().log(Level.INFO, "Loaded language Supreme: " + getSupremeOptions().getLang());
     getLocalization();
 
-    // check Compatibily Legacy (SupremeExpansion)
     if (getSupremeOptions().isUseLegacySupremeexpansionItemId()) {
       Supreme.inst().log(Level.INFO, "Legacy SupremeExpansion IDs: enable");
       getLegacyItem();
@@ -165,7 +189,31 @@ public class Supreme extends JavaPlugin implements SlimefunAddon {
     }
 
     MainSetup.setup(this);
+    registerSupremeCommand();
+    logRecipeDoctor(SupremeRecipeDoctor.scan());
+  }
 
+  private void registerSupremeCommand() {
+    PluginCommand command = getCommand("supreme");
+    if (command == null) {
+      log(Level.WARNING, "Supreme command is missing from plugin.yml; diagnostics are unavailable.");
+      return;
+    }
+    SupremeCommand executor = new SupremeCommand(this);
+    command.setExecutor(executor);
+    command.setTabCompleter(executor);
+  }
+
+  public void logRecipeDoctor(SupremeRecipeDoctor.Report report) {
+    Level level = report.errors() > 0 ? Level.WARNING : Level.INFO;
+    log(level, "[RecipeDoctor] groups=" + report.groups() + " recipes=" + report.recipes()
+        + " errors=" + report.errors() + " warnings=" + report.warnings());
+    if (!report.findings().isEmpty()) {
+      for (String finding : report.findings()) {
+        log(finding.startsWith("ERROR") ? Level.WARNING : Level.INFO,
+            "[RecipeDoctor] " + finding);
+      }
+    }
   }
 
   @Override
