@@ -6,7 +6,9 @@ import com.github.relativobr.supreme.Supreme;
 import com.github.relativobr.supreme.generic.recipe.AbstractItemRecipe;
 import com.github.relativobr.supreme.generic.recipe.InventoryRecipe;
 import com.github.relativobr.supreme.util.SupremeInventoryUtils;
+import com.github.relativobr.supreme.util.SupremeMachineStateCodec;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.NotHopperable;
@@ -19,13 +21,13 @@ import io.github.thebusybiscuit.slimefun4.libraries.dough.protection.Interaction
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ChestMenu;
@@ -46,15 +48,23 @@ import org.bukkit.inventory.ItemStack;
 /**
  * Shared implementation for Supreme's container machines.
  *
- * <p>The state maps are deliberately keyed by placed block so machines never share progress. Inputs may remain visible across several cargo deliveries, are consumed atomically once complete,
- * and are restored if the block is broken before the completed output is delivered.</p>
+ * <p>Supreme Legacy stages large recipes one legal stack per ingredient at a time. Cargo and
+ * Networks can therefore feed 64, let the machine reserve that batch internally, and refill the
+ * released slot until the complete recipe has been secured. Reserved inputs and active processing
+ * state are persisted in Slimefun block data and are restored after restarts.</p>
  */
 public class GenericMachine extends AContainer implements NotHopperable, RecipeDisplayItem {
+
+  private static final int MAX_STAGED_BATCH = 64;
+  private static final long IDLE_BACKOFF_TICKS = 4L;
+  private static final int PROGRESS_CHECKPOINT_INTERVAL = 20;
 
   private final Map<Block, MachineRecipe> processing = new HashMap<>();
   private final Map<Block, Integer> progressTime = new HashMap<>();
   private final Map<Block, Map<ItemStack, Integer>> consumedItemsMap = new HashMap<>();
   private final Map<Block, Integer> attemptCount = new HashMap<>();
+  private final Map<Block, Long> heavyCheckAfter = new HashMap<>();
+  private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
   public final List<AbstractItemRecipe> machineRecipes = new ArrayList<>();
   private Integer timeProcess;
   private String machineIdentifier = "MediumContainerMachine";
@@ -96,21 +106,38 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   }
 
   /**
-   * Limits automated insertion to the number of physical input slots the selected recipe needs for
-   * the incoming ingredient. This prevents cargo systems from spreading several ingredients evenly
-   * across every empty slot while the machine is intentionally waiting for the complete recipe.
+   * Exposes at most one physical stack slot for an ingredient while a recipe is being staged.
+   *
+   * <p>This is the important compatibility behavior for Networks/Cargo: a recipe requiring hundreds
+   * of an ingredient does not advertise enough empty slots for the entire quantity. It advertises one
+   * legal stack, the ticker reserves that stack, and then the same physical slot becomes available for
+   * the next delivery.</p>
    */
   private int[] getRecipeAwareInsertSlots(DirtyChestMenu menu, ItemStack item) {
     if (item == null || item.getType().isAir()) {
       return new int[0];
     }
 
-    // Preserve compatibility for any unusual GenericMachine that has not registered recipes yet.
     if (machineRecipes.isEmpty()) {
       return getInputSlots();
     }
 
-    ItemStack[] selectedRecipe = findTransportRecipe(menu, item);
+    ItemStack[] selectedRecipe = null;
+    Map<ItemStack, Integer> reservedItems = Map.of();
+
+    if (menu instanceof BlockMenu blockMenu) {
+      Block block = blockMenu.getBlock();
+      restorePersistentStateIfNeeded(block, blockMenu);
+      MachineRecipe activeRecipe = getProcessing(block);
+      if (activeRecipe != null) {
+        selectedRecipe = activeRecipe.getInput();
+        reservedItems = getConsumedItems(block);
+      }
+    }
+
+    if (selectedRecipe == null) {
+      selectedRecipe = findTransportRecipe(menu, item);
+    }
     if (selectedRecipe == null) {
       return new int[0];
     }
@@ -130,17 +157,21 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return new int[0];
     }
 
-    int maxStackSize = Math.max(1, requiredTemplate.getMaxStackSize());
-    int requiredSlotCount = Math.max(1, (requiredAmount + maxStackSize - 1) / maxStackSize);
-    List<Integer> matching = new LinkedList<>();
-    List<Integer> empty = new LinkedList<>();
-    int occupiedMatchingSlots = 0;
-    int firstMatchingSlot = -1;
+    int reservedAmount = countMapAmount(reservedItems, requiredTemplate);
+    if (reservedAmount >= requiredAmount) {
+      return new int[0];
+    }
+
+    List<Integer> partialMatching = new LinkedList<>();
+    int fullMatchingSlot = -1;
+    int firstEmptySlot = -1;
 
     for (int slot : getInputSlots()) {
       ItemStack stack = menu.getItemInSlot(slot);
       if (stack == null || stack.getType().isAir()) {
-        empty.add(slot);
+        if (firstEmptySlot < 0) {
+          firstEmptySlot = slot;
+        }
         continue;
       }
 
@@ -148,41 +179,32 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         continue;
       }
 
-      occupiedMatchingSlots++;
-      if (firstMatchingSlot < 0) {
-        firstMatchingSlot = slot;
-      }
       if (stack.getAmount() < stack.getMaxStackSize()) {
-        matching.add(slot);
+        partialMatching.add(slot);
+      } else if (fullMatchingSlot < 0) {
+        fullMatchingSlot = slot;
       }
     }
 
-    // Fill fuller stacks first so cargo consolidates instead of spreading an ingredient evenly.
-    matching.sort((left, right) -> Integer.compare(
-        menu.getItemInSlot(right).getAmount(), menu.getItemInSlot(left).getAmount()));
-
-    int emptyAllowance = Math.max(0, requiredSlotCount - occupiedMatchingSlots);
-    for (int i = 0; i < Math.min(emptyAllowance, empty.size()); i++) {
-      matching.add(empty.get(i));
+    partialMatching.sort(Comparator.comparingInt(
+        slot -> -menu.getItemInSlot(slot).getAmount()));
+    if (!partialMatching.isEmpty()) {
+      return new int[]{partialMatching.get(0)};
     }
 
-    /*
-     * If this ingredient already occupies its full recipe slot allowance, expose one occupied slot
-     * as a transport sentinel. A full slot has zero capacity; a partial slot may accept harmless
-     * excess but cannot claim another physical slot. This also lets compatibility layers distinguish
-     * "recipe quota reached" from "no routing information available".
-     */
-    if (matching.isEmpty() && firstMatchingSlot >= 0) {
-      matching.add(firstMatchingSlot);
+    // A full matching slot is deliberately returned as a zero-capacity sentinel until the ticker
+    // reserves it. This prevents a transport implementation from claiming a second empty slot.
+    if (fullMatchingSlot >= 0) {
+      return new int[]{fullMatchingSlot};
     }
 
-    return matching.stream().mapToInt(Integer::intValue).toArray();
+    return firstEmptySlot >= 0 ? new int[]{firstEmptySlot} : new int[0];
   }
 
   /**
    * Selects the first recipe containing the incoming item that is compatible with everything already
    * present in the machine. When several recipes are possible, prefer the one with the most distinct
-   * ingredients already represented in the input inventory, matching normal recipe selection behavior.
+   * ingredients already represented in the input inventory.
    */
   private ItemStack[] findTransportRecipe(DirtyChestMenu menu, ItemStack incoming) {
     ItemStack[] bestRecipe = null;
@@ -254,11 +276,14 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       public void onBlockBreak(Block b) {
         BlockMenu inv = BlockStorage.getInventory(b);
         if (inv != null) {
-          // Restore reserved inputs before the normal menu drop path, returning each item once.
+          restorePersistentStateIfNeeded(b, inv);
           revertConsumedItem(b, inv);
           inv.dropItems(b.getLocation(), getInputSlots());
           inv.dropItems(b.getLocation(), getOutputSlots());
         } else {
+          if (!consumedItemsMap.containsKey(b) && SupremeMachineStateCodec.hasState(b)) {
+            consumedItemsMap.put(b, SupremeMachineStateCodec.loadConsumedOnly(b));
+          }
           dropConsumedItems(b);
         }
         onMachineBreak(b);
@@ -273,14 +298,14 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   }
 
   /**
-   * Gives specialized machines a chance to validate external state immediately before inputs are
-   * consumed. Returning {@code false} safely cancels the pending cycle.
+   * Gives specialized machines a chance to validate external state immediately before a fully
+   * reserved recipe begins processing. Returning {@code false} returns every reserved ingredient.
    */
   protected boolean canStartProcess(Block block, BlockMenu menu, MachineRecipe recipe) {
     return true;
   }
 
-  /** Called once after the complete recipe input and energy charge have been secured. */
+  /** Called once after the complete recipe input and initial energy charge have been secured. */
   protected void onProcessStarted(Block block, BlockMenu menu, MachineRecipe recipe) {
     // Default machines do not have external state to commit.
   }
@@ -309,7 +334,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         "&cLoad more material to start", "",
         "&7Attempts: &e" + attempts + " &7/ &e"
             + Supreme.getSupremeOptions().getMachineMaxAttemptConsumed(),
-        "&7Progress: &e" + progressCount + " &7/ &e" + totalProgress, "");
+        "&7Reserved/available: &e" + progressCount + " &7/ &e" + totalProgress, "");
     menu.replaceExistingItem(getStatusSlot(), infoDetail);
   }
 
@@ -416,6 +441,13 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return;
     }
 
+    restorePersistentStateIfNeeded(b, inv);
+
+    long gameTime = b.getWorld().getGameTime();
+    if (gameTime < heavyCheckAfter.getOrDefault(b, 0L)) {
+      return;
+    }
+
     if (isProcessing(b)) {
       doProcessing(b, inv);
     } else {
@@ -472,10 +504,16 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       progressTime.put(b, next.getTicks());
       consumedItemsMap.put(b, new LinkedHashMap<>());
       attemptCount.put(b, 0);
-    } else if (getInputSlots().length <= 5) {
-      updateStatusReset(inv);
+      heavyCheckAfter.remove(b);
+      lastProgressCheckpoint.put(b, next.getTicks());
+      persistState(b);
     } else {
-      updateStatusInvalidInput(inv);
+      if (getInputSlots().length <= 5) {
+        updateStatusReset(inv);
+      } else {
+        updateStatusInvalidInput(inv);
+      }
+      backoff(b);
     }
   }
 
@@ -484,6 +522,9 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     processing.remove(b);
     attemptCount.remove(b);
     consumedItemsMap.remove(b);
+    heavyCheckAfter.remove(b);
+    lastProgressCheckpoint.remove(b);
+    SupremeMachineStateCodec.clear(b);
   }
 
   private void doProcessing(Block b, BlockMenu inv) {
@@ -495,6 +536,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
     ItemStack[] result = recipe.getOutput();
     if (result == null || result.length == 0) {
+      revertConsumedItem(b, inv);
       removeMapBlock(b);
       updateStatusReset(inv);
       return;
@@ -515,6 +557,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private boolean takeMachineCharge(Block b, BlockMenu inv) {
     if (getCharge(b.getLocation()) < getEnergyConsumption()) {
       updateStatusConnectEnergy(inv, null);
+      backoff(b);
       return false;
     }
     removeCharge(b.getLocation(), getEnergyConsumption());
@@ -528,9 +571,32 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return;
     }
 
-    // Do not reserve ingredients while a complete result has nowhere to go.
+    // Never hide more inputs while the finished recipe has nowhere to go.
     if (notHasSpaceOutput(inv, recipe.getOutput())) {
       updateStatusOutputFull(inv);
+      backoff(b);
+      return;
+    }
+
+    int stagedThisTick = reserveAvailableInputBatch(b, inv, recipe.getInput());
+    if (!hasAllReservedInputs(b, recipe.getInput())) {
+      int attempts = stagedThisTick > 0 ? 0 : attemptCount.getOrDefault(b, 0) + 1;
+      int maxAttempts = Math.max(1,
+          Supreme.getSupremeOptions().getMachineMaxAttemptConsumed());
+
+      if (attempts >= maxAttempts) {
+        // A stalled partial recipe is rolled back instead of being kept invisible forever.
+        revertConsumedItem(b, inv);
+        removeMapBlock(b);
+        updateStatusInvalidInput(inv);
+        return;
+      }
+
+      attemptCount.put(b, attempts);
+      SupremeMachineStateCodec.saveAttempts(b, attempts);
+      int progressCount = countReservedAndVisibleRecipeInputs(b, inv, recipe.getInput());
+      updateStatusLoadMaterial(inv, recipe.getOutput()[0], attempts, progressCount,
+          totalRecipeAmount(recipe.getInput()));
       return;
     }
 
@@ -541,42 +607,75 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return;
     }
 
-    int attempts = attemptCount.getOrDefault(b, 0) + 1;
-    if (!hasCompleteRecipeInputs(inv, recipe.getInput())) {
-      if (attempts >= Supreme.getSupremeOptions().getMachineMaxAttemptConsumed()) {
-        removeMapBlock(b);
-        updateStatusInvalidInput(inv);
-        return;
-      }
-
-      attemptCount.put(b, attempts);
-      int progressCount = countAvailableRecipeInputs(inv, recipe.getInput());
-      int totalProgress = Arrays.stream(recipe.getInput())
-          .filter(java.util.Objects::nonNull)
-          .mapToInt(ItemStack::getAmount)
-          .sum();
-      updateStatusLoadMaterial(inv, recipe.getOutput()[0], attempts, progressCount,
-          totalProgress);
+    if (notHasSpaceOutput(inv, recipe.getOutput())) {
+      updateStatusOutputFull(inv);
+      backoff(b);
       return;
     }
 
     if (getCharge(b.getLocation()) < getEnergyConsumption()) {
       updateStatusConnectEnergy(inv, recipe.getOutput()[0]);
-      return;
-    }
-
-    // Availability was checked immediately above on the synchronized ticker, so this commit is
-    // atomic from the server's perspective. Inputs are never hidden while waiting for power.
-    if (!consumptionRecipe(b, inv)) {
-      removeMapBlock(b);
-      updateStatusInvalidInput(inv);
+      backoff(b);
       return;
     }
 
     removeCharge(b.getLocation(), getEnergyConsumption());
     onProcessStarted(b, inv, recipe);
-    progressTime.put(b, Math.max(ticksRemaining - getSpeed(), 0));
+    int nextProgress = Math.max(ticksRemaining - getSpeed(), 0);
+    progressTime.put(b, nextProgress);
     attemptCount.put(b, 0);
+    heavyCheckAfter.remove(b);
+    persistState(b);
+  }
+
+  /**
+   * Reserves at most one legal stack of every still-missing ingredient on this ticker pass.
+   */
+  private int reserveAvailableInputBatch(Block b, BlockMenu inv, ItemStack[] recipe) {
+    Map<ItemStack, Integer> requiredItems = groupSimilarItems(recipe);
+    Map<ItemStack, Integer> consumedItems = getConsumedItems(b);
+    int totalConsumedNow = 0;
+
+    for (Map.Entry<ItemStack, Integer> entry : requiredItems.entrySet()) {
+      ItemStack requiredItem = entry.getKey();
+      int requiredAmount = entry.getValue();
+      int alreadyReserved = countMapAmount(consumedItems, requiredItem);
+      int remainingRequired = requiredAmount - alreadyReserved;
+      if (remainingRequired <= 0) {
+        continue;
+      }
+
+      int legalBatch = Math.max(1,
+          Math.min(MAX_STAGED_BATCH, requiredItem.getMaxStackSize()));
+      int batchRemaining = Math.min(remainingRequired, legalBatch);
+
+      for (int slot : getInputSlots()) {
+        ItemStack slotItem = inv.getItemInSlot(slot);
+        if (slotItem == null || slotItem.getType().isAir()
+            || !SlimefunUtils.isItemSimilar(slotItem, requiredItem, false, false)) {
+          continue;
+        }
+
+        int amountToConsume = Math.min(slotItem.getAmount(), batchRemaining);
+        if (amountToConsume > 0) {
+          ItemStack consumed = slotItem.clone();
+          consumed.setAmount(1);
+          inv.consumeItem(slot, amountToConsume);
+          mergeSimilar(consumedItems, consumed, amountToConsume);
+          batchRemaining -= amountToConsume;
+          totalConsumedNow += amountToConsume;
+        }
+        if (batchRemaining <= 0) {
+          break;
+        }
+      }
+    }
+
+    if (totalConsumedNow > 0) {
+      heavyCheckAfter.remove(b);
+      persistState(b);
+    }
+    return totalConsumedNow;
   }
 
   private void revertConsumedItem(Block b, BlockMenu inv) {
@@ -585,6 +684,11 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return;
     }
 
+    returnConsumedMap(b, inv, consumedItems);
+    consumedItems.clear();
+  }
+
+  private void returnConsumedMap(Block b, BlockMenu inv, Map<ItemStack, Integer> consumedItems) {
     for (Map.Entry<ItemStack, Integer> consumedEntry : consumedItems.entrySet()) {
       ItemStack consumedItem = consumedEntry.getKey();
       int amount = consumedEntry.getValue();
@@ -592,7 +696,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         continue;
       }
 
-      int maxStackSize = consumedItem.getMaxStackSize();
+      int maxStackSize = Math.max(1, consumedItem.getMaxStackSize());
       while (amount > 0) {
         int stackSize = Math.min(maxStackSize, amount);
         ItemStack returnItem = consumedItem.clone();
@@ -604,7 +708,6 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         amount -= stackSize;
       }
     }
-    consumedItems.clear();
   }
 
   private void dropConsumedItems(Block block) {
@@ -620,7 +723,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         continue;
       }
       while (amount > 0) {
-        int stackSize = Math.min(item.getMaxStackSize(), amount);
+        int stackSize = Math.min(Math.max(1, item.getMaxStackSize()), amount);
         ItemStack dropped = item.clone();
         dropped.setAmount(stackSize);
         block.getWorld().dropItemNaturally(block.getLocation(), dropped);
@@ -633,6 +736,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private void endProcessTicks(Block b, BlockMenu inv, ItemStack[] result) {
     if (notHasSpaceOutput(inv, result)) {
       updateStatusOutputFull(inv);
+      backoff(b);
       return;
     }
     SupremeInventoryUtils.pushAll(inv, getOutputSlots(), result);
@@ -642,63 +746,41 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
   private void doProcessTicks(Block b, BlockMenu inv, int ticks, int ticksRemaining,
       ItemStack result) {
-    progressTime.put(b, Math.max(ticksRemaining - getSpeed(), 0));
+    int nextProgress = Math.max(ticksRemaining - getSpeed(), 0);
+    progressTime.put(b, nextProgress);
     ChestMenuUtils.updateProgressbar(inv, getStatusSlot(), ticksRemaining, ticks, result);
+
+    int previousCheckpoint = lastProgressCheckpoint.getOrDefault(b, ticks);
+    if (nextProgress <= 0
+        || Math.abs(previousCheckpoint - nextProgress) >= PROGRESS_CHECKPOINT_INTERVAL) {
+      SupremeMachineStateCodec.saveProgress(b, nextProgress);
+      lastProgressCheckpoint.put(b, nextProgress);
+    }
   }
 
-  private boolean consumptionRecipe(Block b, BlockMenu inv) {
-    Map<ItemStack, Integer> requiredItems = groupSimilarItems(getProcessing(b).getInput());
+  private boolean hasAllReservedInputs(Block b, ItemStack[] recipe) {
     Map<ItemStack, Integer> consumedItems = getConsumedItems(b);
-
-    for (Map.Entry<ItemStack, Integer> entry : requiredItems.entrySet()) {
-      ItemStack requiredItem = entry.getKey();
-      int remaining = entry.getValue();
-
-      for (int slot : getInputSlots()) {
-        ItemStack slotItem = inv.getItemInSlot(slot);
-        if (slotItem == null || slotItem.getType().isAir()
-            || !SlimefunUtils.isItemSimilar(slotItem, requiredItem, false, false)) {
-          continue;
-        }
-
-        int amountToConsume = Math.min(slotItem.getAmount(), remaining);
-        if (amountToConsume > 0) {
-          ItemStack consumed = slotItem.clone();
-          inv.consumeItem(slot, amountToConsume);
-          mergeSimilar(consumedItems, consumed, amountToConsume);
-          remaining -= amountToConsume;
-        }
-        if (remaining == 0) {
-          break;
-        }
-      }
-
-      if (remaining > 0) {
-        // This should be unreachable on the synchronized ticker because availability was checked
-        // immediately before committing, but keep the guard to avoid producing for free.
-        revertConsumedItem(b, inv);
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private boolean hasCompleteRecipeInputs(BlockMenu inv, ItemStack[] recipe) {
-    Map<ItemStack, Integer> requiredItems = groupSimilarItems(recipe);
-    for (Map.Entry<ItemStack, Integer> entry : requiredItems.entrySet()) {
-      if (countAvailable(inv, entry.getKey()) < entry.getValue()) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private int countAvailableRecipeInputs(BlockMenu inv, ItemStack[] recipe) {
-    int available = 0;
     for (Map.Entry<ItemStack, Integer> entry : groupSimilarItems(recipe).entrySet()) {
-      available += Math.min(entry.getValue(), countAvailable(inv, entry.getKey()));
+      if (countMapAmount(consumedItems, entry.getKey()) < entry.getValue()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private int countReservedAndVisibleRecipeInputs(Block b, BlockMenu inv, ItemStack[] recipe) {
+    int available = 0;
+    Map<ItemStack, Integer> consumedItems = getConsumedItems(b);
+    for (Map.Entry<ItemStack, Integer> entry : groupSimilarItems(recipe).entrySet()) {
+      int reserved = countMapAmount(consumedItems, entry.getKey());
+      int visible = countAvailable(inv, entry.getKey());
+      available += Math.min(entry.getValue(), reserved + visible);
     }
     return available;
+  }
+
+  private int totalRecipeAmount(ItemStack[] recipe) {
+    return groupSimilarItems(recipe).values().stream().mapToInt(Integer::intValue).sum();
   }
 
   private int countAvailable(BlockMenu inv, ItemStack requiredItem) {
@@ -714,8 +796,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   }
 
   private boolean matchingRecipe(ItemStack[] recipe, BlockMenu inv) {
-    // Starting requires one visible item of each distinct ingredient. Full quantities may arrive
-    // over several cargo ticks and remain in the input slots until the complete recipe can commit.
+    // One visible item of each distinct ingredient is enough to select a recipe. The staged
+    // reservation engine then consumes one legal stack at a time until the full quantities arrive.
     for (ItemStack required : groupSimilarItems(recipe).keySet()) {
       boolean present = false;
       for (int slot : getInputSlots()) {
@@ -746,6 +828,19 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     return grouped;
   }
 
+  private int countMapAmount(Map<ItemStack, Integer> items, ItemStack target) {
+    if (items == null || target == null) {
+      return 0;
+    }
+    int amount = 0;
+    for (Map.Entry<ItemStack, Integer> entry : items.entrySet()) {
+      if (SlimefunUtils.isItemSimilar(entry.getKey(), target, false, false)) {
+        amount += entry.getValue();
+      }
+    }
+    return amount;
+  }
+
   private void mergeSimilar(Map<ItemStack, Integer> items, ItemStack item, int amount) {
     for (Map.Entry<ItemStack, Integer> entry : items.entrySet()) {
       if (SlimefunUtils.isItemSimilar(entry.getKey(), item, false, false)) {
@@ -756,6 +851,107 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     ItemStack key = item.clone();
     key.setAmount(1);
     items.put(key, amount);
+  }
+
+  private void persistState(Block b) {
+    MachineRecipe recipe = getProcessing(b);
+    if (recipe == null) {
+      SupremeMachineStateCodec.clear(b);
+      return;
+    }
+    SupremeMachineStateCodec.save(b, recipe, getProgressTime(b),
+        attemptCount.getOrDefault(b, 0), getConsumedItems(b));
+    lastProgressCheckpoint.put(b, getProgressTime(b));
+  }
+
+  private boolean restorePersistentStateIfNeeded(Block b, BlockMenu inv) {
+    if (processing.containsKey(b)) {
+      return true;
+    }
+    if (!SupremeMachineStateCodec.hasState(b)) {
+      return false;
+    }
+
+    Optional<SupremeMachineStateCodec.State> restored = SupremeMachineStateCodec.load(b);
+    if (restored.isPresent()) {
+      SupremeMachineStateCodec.State state = restored.get();
+      processing.put(b, state.recipe());
+      progressTime.put(b, Math.max(0, state.progress()));
+      attemptCount.put(b, Math.max(0, state.attempts()));
+      consumedItemsMap.put(b, new LinkedHashMap<>(state.consumedItems()));
+      lastProgressCheckpoint.put(b, Math.max(0, state.progress()));
+      heavyCheckAfter.remove(b);
+      return true;
+    }
+
+    // If the recipe payload was damaged but the reserved-item payload is still readable, return
+    // those items immediately rather than silently discarding them.
+    Map<ItemStack, Integer> recoverable = SupremeMachineStateCodec.loadConsumedOnly(b);
+    if (!recoverable.isEmpty()) {
+      returnConsumedMap(b, inv, recoverable);
+    }
+    SupremeMachineStateCodec.clear(b);
+    return false;
+  }
+
+  private void backoff(Block b) {
+    heavyCheckAfter.put(b, b.getWorld().getGameTime() + IDLE_BACKOFF_TICKS);
+  }
+
+  /**
+   * Returns human-readable live state for {@code /supreme doctor machine}.
+   */
+  public List<String> getMachineDiagnosticLines(Block block) {
+    List<String> lines = new ArrayList<>();
+    BlockMenu inv = BlockStorage.getInventory(block);
+    if (inv == null) {
+      lines.add("No Slimefun inventory is loaded for this block.");
+      return lines;
+    }
+
+    restorePersistentStateIfNeeded(block, inv);
+    MachineRecipe recipe = getProcessing(block);
+    lines.add("Machine: " + getId() + " (" + getMachineIdentifier() + ")");
+    lines.add("Charge: " + getCharge(block.getLocation()) + " J | Consumption: "
+        + getEnergyConsumption() + " J/tick");
+
+    if (recipe == null) {
+      lines.add("State: IDLE / waiting for a recipe");
+      return lines;
+    }
+
+    int progress = getProgressTime(block);
+    String state;
+    if (notHasSpaceOutput(inv, recipe.getOutput())) {
+      state = "OUTPUT FULL";
+    } else if (progress == recipe.getTicks() && !hasAllReservedInputs(block, recipe.getInput())) {
+      state = "STAGING INPUTS";
+    } else if (getCharge(block.getLocation()) < getEnergyConsumption()) {
+      state = "WAITING FOR POWER";
+    } else if (progress <= 0) {
+      state = "READY TO OUTPUT";
+    } else {
+      state = "PROCESSING";
+    }
+    lines.add("State: " + state + " | Progress: " + progress + "/" + recipe.getTicks());
+    lines.add("Output space: " + (!notHasSpaceOutput(inv, recipe.getOutput()) ? "available" : "full"));
+
+    Map<ItemStack, Integer> reserved = getConsumedItems(block);
+    for (Map.Entry<ItemStack, Integer> entry : groupSimilarItems(recipe.getInput()).entrySet()) {
+      ItemStack ingredient = entry.getKey();
+      int required = entry.getValue();
+      int reservedAmount = countMapAmount(reserved, ingredient);
+      int visible = countAvailable(inv, ingredient);
+      lines.add(describeItem(ingredient) + ": required=" + required + " reserved="
+          + reservedAmount + " visible=" + visible + " remaining="
+          + Math.max(0, required - reservedAmount));
+    }
+    return lines;
+  }
+
+  private String describeItem(ItemStack item) {
+    SlimefunItem slimefunItem = SlimefunItem.getByItem(item);
+    return slimefunItem != null ? slimefunItem.getId() : item.getType().getKey().toString();
   }
 
   private ItemStack getDisplayOrInfo(ItemStack itemStack, String name) {

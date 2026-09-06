@@ -9,7 +9,7 @@ api-version: 1.17
 commands:
   supreme:
     description: Supreme Legacy information and diagnostics
-    usage: /supreme [doctor recipes]
+    usage: /supreme [doctor <recipes|machine>]
 permissions:
   supreme.admin:
     description: Allows Supreme administrative diagnostics

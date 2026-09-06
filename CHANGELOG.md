@@ -1,5 +1,21 @@
 # Changelog
 
+## Supreme Legacy 1.0.3
+
+### Automation & Persistence
+
+- Added true staged recipe reservation for GenericMachine recipes: automation now exposes one legal physical stack per still-needed ingredient instead of enough slots for the entire recipe quantity.
+- Large recipes can now follow the old Supreme flow of supplying up to 64 of an ingredient, reserving that batch internally, reopening the slot, and accepting the next batch until the complete recipe is secured.
+- Staged reservations are recipe-aware for Networks/Cargo and stop advertising an ingredient once its required quantity has been fully reserved.
+- Reserved inputs, active recipe data and processing progress are persisted in Slimefun block data and restored after server restarts.
+- Exact reserved ItemStacks are stored with Paper NBT byte serialization, while large reserved quantities are stored separately so illegal overstacked ItemStacks are never required.
+- If persisted recipe state becomes unreadable but reserved-item data can still be recovered, Supreme returns those reserved items instead of silently discarding them.
+- Stalled partial reservations roll back safely after `machine-max-attempt-consumed` consecutive no-progress checks; any new staged input resets that idle-attempt counter.
+- Added `/supreme doctor machine` for operators. Look at a supported Supreme GenericMachine to see live state, charge, energy use, output capacity, recipe progress and required/reserved/visible/remaining quantities for every ingredient.
+- Added a lightweight 4-tick heavy-check backoff while GenericMachines are idle, output-blocked, or waiting for power. Active processing remains full-speed.
+- Processing progress is checkpointed periodically without repeatedly reserializing the full recipe payload.
+- Preserved existing item IDs, recipes, output quantities, machine processing speeds, energy costs, output-full safety and block-break item return behavior.
+
 ## Supreme Legacy 1.0.2
 
 ### Recipe & Machine Safety
