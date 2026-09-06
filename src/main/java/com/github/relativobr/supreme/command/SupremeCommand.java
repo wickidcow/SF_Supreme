@@ -1,16 +1,21 @@
 package com.github.relativobr.supreme.command;
 
 import com.github.relativobr.supreme.Supreme;
+import com.github.relativobr.supreme.generic.machine.GenericMachine;
 import com.github.relativobr.supreme.util.SupremeRecipeDoctor;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import javax.annotation.Nonnull;
+import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import org.bukkit.ChatColor;
+import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Player;
 
 /** Administrative Supreme diagnostics. */
 public final class SupremeCommand implements CommandExecutor, TabCompleter {
@@ -30,47 +35,85 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
           + plugin.getDescription().getVersion());
       sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor recipes"
           + ChatColor.DARK_GRAY + " - audit Supreme machine recipes");
+      sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor machine"
+          + ChatColor.DARK_GRAY + " - inspect the Supreme machine you are looking at");
       return true;
     }
 
-    if (args.length >= 2
-        && args[0].equalsIgnoreCase("doctor")
-        && args[1].equalsIgnoreCase("recipes")) {
+    if (args.length >= 2 && args[0].equalsIgnoreCase("doctor")) {
       if (!sender.hasPermission("supreme.admin")) {
         sender.sendMessage(ChatColor.RED + "You do not have permission to run Supreme diagnostics.");
         return true;
       }
 
-      SupremeRecipeDoctor.Report report = SupremeRecipeDoctor.scan();
-      sender.sendMessage(ChatColor.AQUA + "Supreme Recipe Doctor");
-      sender.sendMessage(ChatColor.GRAY + "Recipe groups: " + ChatColor.WHITE + report.groups()
-          + ChatColor.GRAY + " | Recipes: " + ChatColor.WHITE + report.recipes());
-      sender.sendMessage(ChatColor.GRAY + "Errors: "
-          + (report.errors() == 0 ? ChatColor.GREEN : ChatColor.RED) + report.errors()
-          + ChatColor.GRAY + " | Warnings: "
-          + (report.warnings() == 0 ? ChatColor.GREEN : ChatColor.YELLOW) + report.warnings());
-
-      if (report.findings().isEmpty()) {
-        sender.sendMessage(ChatColor.GREEN + "All audited Supreme recipes passed validation.");
+      if (args[1].equalsIgnoreCase("recipes")) {
+        runRecipeDoctor(sender);
         return true;
       }
-
-      int shown = Math.min(MAX_FINDINGS_IN_CHAT, report.findings().size());
-      for (int i = 0; i < shown; i++) {
-        String finding = report.findings().get(i);
-        ChatColor color = finding.startsWith("ERROR") ? ChatColor.RED : ChatColor.YELLOW;
-        sender.sendMessage(color + finding);
+      if (args[1].equalsIgnoreCase("machine")) {
+        runMachineDoctor(sender);
+        return true;
       }
-      if (report.findings().size() > shown) {
-        sender.sendMessage(ChatColor.GRAY + "...and " + (report.findings().size() - shown)
-            + " more finding(s). See the server log for the full audit.");
-      }
-      plugin.logRecipeDoctor(report);
-      return true;
     }
 
-    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " doctor recipes");
+    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " doctor <recipes|machine>");
     return true;
+  }
+
+  private void runRecipeDoctor(CommandSender sender) {
+    SupremeRecipeDoctor.Report report = SupremeRecipeDoctor.scan();
+    sender.sendMessage(ChatColor.AQUA + "Supreme Recipe Doctor");
+    sender.sendMessage(ChatColor.GRAY + "Recipe groups: " + ChatColor.WHITE + report.groups()
+        + ChatColor.GRAY + " | Recipes: " + ChatColor.WHITE + report.recipes());
+    sender.sendMessage(ChatColor.GRAY + "Errors: "
+        + (report.errors() == 0 ? ChatColor.GREEN : ChatColor.RED) + report.errors()
+        + ChatColor.GRAY + " | Warnings: "
+        + (report.warnings() == 0 ? ChatColor.GREEN : ChatColor.YELLOW) + report.warnings());
+
+    if (report.findings().isEmpty()) {
+      sender.sendMessage(ChatColor.GREEN + "All audited Supreme recipes passed validation.");
+      return;
+    }
+
+    int shown = Math.min(MAX_FINDINGS_IN_CHAT, report.findings().size());
+    for (int i = 0; i < shown; i++) {
+      String finding = report.findings().get(i);
+      ChatColor color = finding.startsWith("ERROR") ? ChatColor.RED : ChatColor.YELLOW;
+      sender.sendMessage(color + finding);
+    }
+    if (report.findings().size() > shown) {
+      sender.sendMessage(ChatColor.GRAY + "...and " + (report.findings().size() - shown)
+          + " more finding(s). See the server log for the full audit.");
+    }
+    plugin.logRecipeDoctor(report);
+  }
+
+  @SuppressWarnings("deprecation")
+  private void runMachineDoctor(CommandSender sender) {
+    if (!(sender instanceof Player player)) {
+      sender.sendMessage(ChatColor.RED + "Machine Doctor must be run by a player looking at a block.");
+      return;
+    }
+
+    Block target = player.getTargetBlockExact(8);
+    if (target == null) {
+      sender.sendMessage(ChatColor.RED + "Look directly at a Supreme machine within 8 blocks.");
+      return;
+    }
+
+    SlimefunItem item = BlockStorage.check(target);
+    if (!(item instanceof GenericMachine machine)) {
+      sender.sendMessage(ChatColor.RED
+          + "That block is not a Supreme GenericMachine supported by Machine Doctor.");
+      return;
+    }
+
+    sender.sendMessage(ChatColor.AQUA + "Supreme Machine Doctor");
+    sender.sendMessage(ChatColor.GRAY + target.getWorld().getName() + " "
+        + target.getX() + "," + target.getY() + "," + target.getZ());
+    for (String line : machine.getMachineDiagnosticLines(target)) {
+      sender.sendMessage(ChatColor.GRAY + line);
+    }
   }
 
   @Override
@@ -81,6 +124,7 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       addIfMatches(options, "doctor", args[0]);
     } else if (args.length == 2 && args[0].equalsIgnoreCase("doctor")) {
       addIfMatches(options, "recipes", args[1]);
+      addIfMatches(options, "machine", args[1]);
     }
     return options;
   }
