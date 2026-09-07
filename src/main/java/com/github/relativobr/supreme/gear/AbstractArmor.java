@@ -21,36 +21,36 @@ public class AbstractArmor extends SlimefunArmorPiece implements ProtectiveArmor
   @ParametersAreNonnullByDefault
   private AbstractArmor(SlimefunItemStack item, ItemStack[] recipe) {
     super(ItemGroups.ARMOR_CATEGORY, item, MultiBlockGearFabricator.getMachine(), recipe,
-            EnchantsAndEffectsUtil.getPotionEffects(item));
+        EnchantsAndEffectsUtil.getPotionEffects(item));
   }
 
   public static void setup(Supreme sup) {
+    EnchantsAndEffectsUtil.addGearBasicEnchants(ArmorBasic.TITANIUM_HELMET, ArmorBasic.AURUM_HELMET,
+        ArmorBasic.ADAMANTIUM_HELMET, ArmorBasic.TITANIUM_CHESTPLATE, ArmorBasic.AURUM_CHESTPLATE,
+        ArmorBasic.ADAMANTIUM_CHESTPLATE, ArmorBasic.TITANIUM_LEGGINGS, ArmorBasic.AURUM_LEGGINGS,
+        ArmorBasic.ADAMANTIUM_LEGGINGS, ArmorBasic.TITANIUM_BOOTS, ArmorBasic.AURUM_BOOTS,
+        ArmorBasic.ADAMANTIUM_BOOTS);
 
-    // add Enchant
-    EnchantsAndEffectsUtil.addGearBasicEnchants(ArmorBasic.TITANIUM_HELMET, ArmorBasic.AURUM_HELMET, ArmorBasic.ADAMANTIUM_HELMET,
-        ArmorBasic.TITANIUM_CHESTPLATE, ArmorBasic.AURUM_CHESTPLATE, ArmorBasic.ADAMANTIUM_CHESTPLATE,
-        ArmorBasic.TITANIUM_LEGGINGS, ArmorBasic.AURUM_LEGGINGS, ArmorBasic.ADAMANTIUM_LEGGINGS,
-        ArmorBasic.TITANIUM_BOOTS, ArmorBasic.AURUM_BOOTS, ArmorBasic.ADAMANTIUM_BOOTS);
-
-    // add Enchant
-    EnchantsAndEffectsUtil.addGearThorniumEnchants(ArmorThornium.THORNIUM_HELMET, ArmorThornium.THORNIUM_HELMET_MAGIC,
-        ArmorThornium.THORNIUM_HELMET_RARE, ArmorThornium.THORNIUM_HELMET_EPIC, ArmorThornium.THORNIUM_HELMET_LEGENDARY,
+    EnchantsAndEffectsUtil.addGearThorniumEnchants(ArmorThornium.THORNIUM_HELMET,
+        ArmorThornium.THORNIUM_HELMET_MAGIC, ArmorThornium.THORNIUM_HELMET_RARE,
+        ArmorThornium.THORNIUM_HELMET_EPIC, ArmorThornium.THORNIUM_HELMET_LEGENDARY,
         ArmorThornium.THORNIUM_HELMET_SUPREME, ArmorThornium.THORNIUM_CHESTPLATE,
         ArmorThornium.THORNIUM_CHESTPLATE_MAGIC, ArmorThornium.THORNIUM_CHESTPLATE_RARE,
         ArmorThornium.THORNIUM_CHESTPLATE_EPIC, ArmorThornium.THORNIUM_CHESTPLATE_LEGENDARY,
         ArmorThornium.THORNIUM_CHESTPLATE_SUPREME, ArmorThornium.THORNIUM_LEGGINGS,
         ArmorThornium.THORNIUM_LEGGINGS_MAGIC, ArmorThornium.THORNIUM_LEGGINGS_RARE,
         ArmorThornium.THORNIUM_LEGGINGS_EPIC, ArmorThornium.THORNIUM_LEGGINGS_LEGENDARY,
-        ArmorThornium.THORNIUM_LEGGINGS_SUPREME, ArmorThornium.THORNIUM_BOOTS, ArmorThornium.THORNIUM_BOOTS_MAGIC,
-        ArmorThornium.THORNIUM_BOOTS_RARE, ArmorThornium.THORNIUM_BOOTS_EPIC, ArmorThornium.THORNIUM_BOOTS_LEGENDARY,
+        ArmorThornium.THORNIUM_LEGGINGS_SUPREME, ArmorThornium.THORNIUM_BOOTS,
+        ArmorThornium.THORNIUM_BOOTS_MAGIC, ArmorThornium.THORNIUM_BOOTS_RARE,
+        ArmorThornium.THORNIUM_BOOTS_EPIC, ArmorThornium.THORNIUM_BOOTS_LEGENDARY,
         ArmorThornium.THORNIUM_BOOTS_SUPREME);
 
     new AbstractArmor(ArmorBasic.TITANIUM_HELMET, ArmorBasic.RECIPE_TITANIUM_HELMET).register(sup);
     new AbstractArmor(ArmorBasic.AURUM_HELMET, ArmorBasic.RECIPE_AURUM_HELMET).register(sup);
     new AbstractArmor(ArmorBasic.ADAMANTIUM_HELMET, ArmorBasic.RECIPE_ADAMANTIUM_HELMET).register(sup);
     new AbstractArmor(ArmorThornium.THORNIUM_HELMET, ArmorThornium.RECIPE_THORNIUM_HELMET).register(sup);
-    new AbstractArmor(ArmorThornium.THORNIUM_HELMET_MAGIC, ItemTier.getMagicRecipe(ArmorThornium.THORNIUM_HELMET)).register(
-        sup);
+    new AbstractArmor(ArmorThornium.THORNIUM_HELMET_MAGIC,
+        ItemTier.getMagicRecipe(ArmorThornium.THORNIUM_HELMET)).register(sup);
     new AbstractArmor(ArmorThornium.THORNIUM_HELMET_RARE,
         ItemTier.getRareRecipe(ArmorThornium.THORNIUM_HELMET_MAGIC)).register(sup);
     new AbstractArmor(ArmorThornium.THORNIUM_HELMET_EPIC,
@@ -94,12 +94,12 @@ public class AbstractArmor extends SlimefunArmorPiece implements ProtectiveArmor
     new AbstractArmor(ArmorBasic.AURUM_BOOTS, ArmorBasic.RECIPE_AURUM_BOOTS).register(sup);
     new AbstractArmor(ArmorBasic.ADAMANTIUM_BOOTS, ArmorBasic.RECIPE_ADAMANTIUM_BOOTS).register(sup);
     new AbstractArmor(ArmorThornium.THORNIUM_BOOTS, ArmorThornium.RECIPE_THORNIUM_BOOTS).register(sup);
-    new AbstractArmor(ArmorThornium.THORNIUM_BOOTS_MAGIC, ItemTier.getMagicRecipe(ArmorThornium.THORNIUM_BOOTS)).register(
-        sup);
-    new AbstractArmor(ArmorThornium.THORNIUM_BOOTS_RARE, ItemTier.getRareRecipe(ArmorThornium.THORNIUM_BOOTS_MAGIC)).register(
-        sup);
-    new AbstractArmor(ArmorThornium.THORNIUM_BOOTS_EPIC, ItemTier.getEpicRecipe(ArmorThornium.THORNIUM_BOOTS_RARE)).register(
-        sup);
+    new AbstractArmor(ArmorThornium.THORNIUM_BOOTS_MAGIC,
+        ItemTier.getMagicRecipe(ArmorThornium.THORNIUM_BOOTS)).register(sup);
+    new AbstractArmor(ArmorThornium.THORNIUM_BOOTS_RARE,
+        ItemTier.getRareRecipe(ArmorThornium.THORNIUM_BOOTS_MAGIC)).register(sup);
+    new AbstractArmor(ArmorThornium.THORNIUM_BOOTS_EPIC,
+        ItemTier.getEpicRecipe(ArmorThornium.THORNIUM_BOOTS_RARE)).register(sup);
     new AbstractArmor(ArmorThornium.THORNIUM_BOOTS_LEGENDARY,
         ItemTier.getLegendaryRecipe(ArmorThornium.THORNIUM_BOOTS_EPIC)).register(sup);
     new AbstractArmor(ArmorThornium.THORNIUM_BOOTS_SUPREME,
@@ -109,17 +109,47 @@ public class AbstractArmor extends SlimefunArmorPiece implements ProtectiveArmor
   @Nonnull
   @Override
   public ProtectionType[] getProtectionTypes() {
-    return new ProtectionType[]{ProtectionType.BEES, ProtectionType.RADIATION, ProtectionType.FLYING_INTO_WALL};
+    return new ProtectionType[]{ProtectionType.BEES, ProtectionType.RADIATION,
+        ProtectionType.FLYING_INTO_WALL};
   }
 
   @Override
   public boolean isFullSetRequired() {
-    return false;
+    return true;
   }
 
   @Nonnull
   @Override
   public NamespacedKey getArmorSetId() {
-    return new NamespacedKey(getAddon().getJavaPlugin(), "supreme_armor");
+    return new NamespacedKey(getAddon().getJavaPlugin(), getArmorSetKey());
+  }
+
+  private String getArmorSetKey() {
+    String id = getId();
+    if (id.contains("TITANIUM")) {
+      return "supreme_armor_titanium";
+    }
+    if (id.contains("AURUM")) {
+      return "supreme_armor_aurum";
+    }
+    if (id.contains("ADAMANTIUM")) {
+      return "supreme_armor_adamantium";
+    }
+    if (id.contains("THORNIUM")) {
+      String tier = "base";
+      if (id.endsWith("_MAGIC")) {
+        tier = "magic";
+      } else if (id.endsWith("_RARE")) {
+        tier = "rare";
+      } else if (id.endsWith("_EPIC")) {
+        tier = "epic";
+      } else if (id.endsWith("_LEGENDARY")) {
+        tier = "legendary";
+      } else if (id.endsWith("_SUPREME")) {
+        tier = "supreme";
+      }
+      return "supreme_armor_thornium_" + tier;
+    }
+    return "supreme_armor";
   }
 }
