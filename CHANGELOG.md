@@ -52,7 +52,7 @@
 - Cached sorted Tech Generator recipe views instead of rebuilding and sorting the full recipe list every tick.
 - Added per-block recipe-match caching so unchanged generator cards do not repeatedly rescan all Tech Generator recipes.
 - Added per-block generation-plan caching for stable MobTech upgrades, reusing calculated outputs, speed modifiers, and energy consumption until the card or upgrade slots actually change.
-- Reduced stable MobTech upgrade inspection from several passes per tick to one recalculation only when the card or upgrade slots actually change.
+- Reduced stable MobTech upgrade inspection from several passes per tick to one recalculation only when the upgrade state changes.
 - Reused MobTech persistent-data keys instead of constructing new `NamespacedKey` objects during repeated machine ticks.
 - Prevented identical idle, output-full, and no-power status items from being recreated every tick.
 - Reworked shared output-capacity simulation to track stack amounts without cloning every occupied output slot.
