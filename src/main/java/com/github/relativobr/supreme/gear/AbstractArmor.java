@@ -135,20 +135,23 @@ public class AbstractArmor extends SlimefunArmorPiece implements ProtectiveArmor
     if (id.contains("ADAMANTIUM")) {
       return "supreme_armor_adamantium";
     }
-    if (id.contains("THORNIUM")) {
-      String tier = "base";
-      if (id.endsWith("_MAGIC")) {
-        tier = "magic";
-      } else if (id.endsWith("_RARE")) {
-        tier = "rare";
-      } else if (id.endsWith("_EPIC")) {
-        tier = "epic";
-      } else if (id.endsWith("_LEGENDARY")) {
-        tier = "legendary";
-      } else if (id.endsWith("_SUPREME")) {
-        tier = "supreme";
-      }
-      return "supreme_armor_thornium_" + tier;
+    if (id.endsWith("_THORNIUM")) {
+      return "supreme_armor_thornium_base";
+    }
+    if (id.endsWith("_MAGIC")) {
+      return "supreme_armor_thornium_magic";
+    }
+    if (id.endsWith("_RARE")) {
+      return "supreme_armor_thornium_rare";
+    }
+    if (id.endsWith("_EPIC")) {
+      return "supreme_armor_thornium_epic";
+    }
+    if (id.endsWith("_LEGENDARY")) {
+      return "supreme_armor_thornium_legendary";
+    }
+    if (id.endsWith("_SUPREME")) {
+      return "supreme_armor_thornium_supreme";
     }
     return "supreme_armor";
   }
