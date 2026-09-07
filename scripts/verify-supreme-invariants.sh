@@ -50,9 +50,21 @@ if awk '/protected MachineRecipe findNextRecipe/,/^  }/' "$JAVA/machine/VirtualA
   exit 1
 fi
 
-grep -q 'public boolean isFullSetRequired()' "$JAVA/gear/AbstractArmor.java"
-awk '/public boolean isFullSetRequired\(\)/,/^  }/' "$JAVA/gear/AbstractArmor.java" | grep -q 'return true;'
-grep -q 'supreme_armor_thornium_' "$JAVA/gear/AbstractArmor.java"
+ARMOR="$JAVA/gear/AbstractArmor.java"
+grep -q 'public boolean isFullSetRequired()' "$ARMOR"
+awk '/public boolean isFullSetRequired\(\)/,/^  }/' "$ARMOR" | grep -q 'return true;'
+grep -q 'id.endsWith("_THORNIUM")' "$ARMOR"
+grep -q 'id.endsWith("_MAGIC")' "$ARMOR"
+grep -q 'id.endsWith("_RARE")' "$ARMOR"
+grep -q 'id.endsWith("_EPIC")' "$ARMOR"
+grep -q 'id.endsWith("_LEGENDARY")' "$ARMOR"
+grep -q 'id.endsWith("_SUPREME")' "$ARMOR"
+grep -q 'supreme_armor_thornium_base' "$ARMOR"
+grep -q 'supreme_armor_thornium_magic' "$ARMOR"
+grep -q 'supreme_armor_thornium_rare' "$ARMOR"
+grep -q 'supreme_armor_thornium_epic' "$ARMOR"
+grep -q 'supreme_armor_thornium_legendary' "$ARMOR"
+grep -q 'supreme_armor_thornium_supreme' "$ARMOR"
 
 grep -q 'SupremeMachineDiagnostics diagnostics' "$JAVA/command/SupremeCommand.java"
 
