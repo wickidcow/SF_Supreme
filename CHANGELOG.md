@@ -1,5 +1,20 @@
 # Changelog
 
+## Supreme Legacy 1.0.4
+
+### Specialized Machine Safety
+
+- Added a shared persistent state format for Supreme machines that run outside GenericMachine's normal staged-processing engine.
+- Tech Robotic now persists its selected output, progress, and exact consumed upgrade stack; breaking the machine after a restart still returns reserved inputs.
+- Tech Mutation now persists both consumed inputs, progress, output, effective chance, and the rolled success/failure result so an output-full restart cannot reroll the mutation.
+- Mob Collector now persists its active recipe, selected input slot, and progress across restarts while continuing to commit bottle/tool cost only when the output is successfully delivered.
+- Virtual Garden now persists active cultivation recipe and progress across restarts.
+- Virtual Aquarium now persists the selected output, input slot, recipe, and progress; tool durability is deferred until final output commit so no durability is spent while waiting for power, output space, or restart recovery.
+- Added specialized Machine Doctor providers so `/supreme doctor machine` reports authoritative state for Tech Robotic, Tech Mutation, Mob Collector, Virtual Garden, and Virtual Aquarium instead of falling back to GenericMachine's unrelated state maps.
+- Supreme armor protections now require a complete matching armor set. Titanium, Aurum, Adamantium, and each Thornium progression tier use distinct armor-set IDs so a single piece or mixed-tier set cannot grant radiation immunity.
+- Expanded CI safety invariants for staged 64-item routing, GenericMachine persistence, specialized-machine persistence, mutation result persistence, Virtual Aquarium deferred tool cost, armor-set protection, capacitor limits, and energy-rate conversions.
+- Preserved existing item IDs, recipes, output quantities, processing speeds, energy costs, Mob Collector drop tables, Virtual Aquarium drop weights, and Supreme progression recipes.
+
 ## Supreme Legacy 1.0.3
 
 ### Automation & Persistence
@@ -37,7 +52,7 @@
 - Cached sorted Tech Generator recipe views instead of rebuilding and sorting the full recipe list every tick.
 - Added per-block recipe-match caching so unchanged generator cards do not repeatedly rescan all Tech Generator recipes.
 - Added per-block generation-plan caching for stable MobTech upgrades, reusing calculated outputs, speed modifiers, and energy consumption until the card or upgrade slots actually change.
-- Reduced stable MobTech upgrade inspection from several passes per tick to one recalculation only when the upgrade state changes.
+- Reduced stable MobTech upgrade inspection from several passes per tick to one recalculation only when the card or upgrade slots actually change.
 - Reused MobTech persistent-data keys instead of constructing new `NamespacedKey` objects during repeated machine ticks.
 - Prevented identical idle, output-full, and no-power status items from being recreated every tick.
 - Reworked shared output-capacity simulation to track stack amounts without cloning every occupied output slot.
