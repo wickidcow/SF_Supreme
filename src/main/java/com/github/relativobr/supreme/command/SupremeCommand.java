@@ -2,6 +2,7 @@ package com.github.relativobr.supreme.command;
 
 import com.github.relativobr.supreme.Supreme;
 import com.github.relativobr.supreme.generic.machine.GenericMachine;
+import com.github.relativobr.supreme.generic.machine.SupremeMachineDiagnostics;
 import com.github.relativobr.supreme.util.SupremeRecipeDoctor;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import java.util.ArrayList;
@@ -102,16 +103,21 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
     }
 
     SlimefunItem item = BlockStorage.check(target);
-    if (!(item instanceof GenericMachine machine)) {
+    List<String> diagnosticLines;
+    if (item instanceof SupremeMachineDiagnostics diagnostics) {
+      diagnosticLines = diagnostics.getMachineDiagnosticLines(target);
+    } else if (item instanceof GenericMachine machine) {
+      diagnosticLines = machine.getMachineDiagnosticLines(target);
+    } else {
       sender.sendMessage(ChatColor.RED
-          + "That block is not a Supreme GenericMachine supported by Machine Doctor.");
+          + "That block is not a Supreme machine supported by Machine Doctor.");
       return;
     }
 
     sender.sendMessage(ChatColor.AQUA + "Supreme Machine Doctor");
     sender.sendMessage(ChatColor.GRAY + target.getWorld().getName() + " "
         + target.getX() + "," + target.getY() + "," + target.getZ());
-    for (String line : machine.getMachineDiagnosticLines(target)) {
+    for (String line : diagnosticLines) {
       sender.sendMessage(ChatColor.GRAY + line);
     }
   }

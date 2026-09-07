@@ -1,10 +1,10 @@
 package com.github.relativobr.supreme.machine;
 
-import com.github.relativobr.supreme.util.UtilEnergy;
 import static com.github.relativobr.supreme.Supreme.getSupremeOptions;
 
 import com.github.relativobr.supreme.compat.SupremeBlockTicker;
 import com.github.relativobr.supreme.generic.machine.SimpleItemWithLargeContainerMachine;
+import com.github.relativobr.supreme.generic.machine.SupremeMachineDiagnostics;
 import com.github.relativobr.supreme.machine.recipe.MobCollectorMachineRecipe;
 import com.github.relativobr.supreme.resource.SupremeComponents;
 import com.github.relativobr.supreme.resource.magical.SupremeAttribute;
@@ -12,6 +12,8 @@ import com.github.relativobr.supreme.resource.magical.SupremeCetrus;
 import com.github.relativobr.supreme.util.SupremeInventoryUtils;
 import com.github.relativobr.supreme.util.SupremeItemStack;
 import com.github.relativobr.supreme.util.SupremeOptions;
+import com.github.relativobr.supreme.util.SupremeSpecialMachineStateCodec;
+import com.github.relativobr.supreme.util.UtilEnergy;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -22,10 +24,12 @@ import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
 import io.github.thebusybiscuit.slimefun4.libraries.commons.lang.Validate;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
 import io.github.thebusybiscuit.slimefun4.utils.LoreBuilder;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 import javax.annotation.Nonnull;
@@ -36,12 +40,20 @@ import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.DyeColor;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
-import org.bukkit.entity.*;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.Sheep;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 
-public class MobCollector extends SimpleItemWithLargeContainerMachine {
+public class MobCollector extends SimpleItemWithLargeContainerMachine
+    implements SupremeMachineDiagnostics {
+
+  private static final String STATE_TYPE = "MOB_COLLECTOR";
+  private static final int PROGRESS_CHECKPOINT_INTERVAL = 20;
 
   public static final SlimefunItemStack MOB_COLLECTOR_MACHINE = new SupremeItemStack("SUPREME_MOB_COLLECTOR_MACHINE_I",
       Material.RESPAWN_ANCHOR, "&bMob Collector", "", "&fThis machine allows you to collect ",
@@ -59,7 +71,7 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
       LoreBuilder.powerBuffer(5000), UtilEnergy.energyPowerPerSecond(100), "", "&3Supreme Machine");
   public static final ItemStack[] RECIPE_MOB_COLLECTOR_MACHINE_II = new ItemStack[]{
       SupremeComponents.CONVEYANCE_MACHINE, SupremeCetrus.CETRUS_LUMIUM, SupremeComponents.CONVEYANCE_MACHINE,
-      SupremeComponents.INDUCTOR_MACHINE, MobCollector.MOB_COLLECTOR_MACHINE, SupremeComponents.INDUCTOR_MACHINE,
+      SupremeComponents.INDUCTOR_MACHINE, MOB_COLLECTOR_MACHINE, SupremeComponents.INDUCTOR_MACHINE,
       SupremeComponents.THORNERITE, SupremeCetrus.CETRUS_IGNIS, SupremeComponents.THORNERITE};
 
   public static final SlimefunItemStack MOB_COLLECTOR_MACHINE_III = new SupremeItemStack(
@@ -69,13 +81,14 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
       LoreBuilder.powerBuffer(15000), UtilEnergy.energyPowerPerSecond(300), "", "&3Supreme Machine");
   public static final ItemStack[] RECIPE_MOB_COLLECTOR_MACHINE_III = new ItemStack[]{SupremeComponents.THORNERITE,
       SupremeAttribute.getBomb(), SupremeComponents.THORNERITE, SupremeComponents.SUPREME,
-      MobCollector.MOB_COLLECTOR_MACHINE_II, SupremeComponents.SUPREME, SupremeComponents.CRYSTALLIZER_MACHINE,
+      MOB_COLLECTOR_MACHINE_II, SupremeComponents.SUPREME, SupremeComponents.CRYSTALLIZER_MACHINE,
       SupremeCetrus.CETRUS_LUMIUM, SupremeComponents.CRYSTALLIZER_MACHINE};
 
   private final Map<Block, MachineRecipe> processing = new HashMap<>();
   private final Map<Block, Integer> progress = new HashMap<>();
   private final Map<Block, Integer> selectedInputSlots = new HashMap<>();
-  private final Set<MobCollectorMachineRecipe> mobCollectorMachineRecipes = new HashSet();
+  private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
+  private final Set<MobCollectorMachineRecipe> mobCollectorMachineRecipes = new HashSet<>();
   private int mobRange = 4;
 
   @ParametersAreNonnullByDefault
@@ -83,200 +96,157 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
     super(category, item, recipeType, recipe);
   }
 
-
   @Override
   protected void registerDefaultRecipes() {
     SupremeOptions supremeOptions = getSupremeOptions();
     boolean customBc = supremeOptions.isCustomBc();
-    this.recipes.clear();
-    this.addProduce(
-        new MobCollectorMachineRecipe(new ItemStack(Material.GLASS_BOTTLE, this.getSpeed()),
-            new ItemStack(Material.HONEY_BOTTLE, this.getSpeed()),
-            (n) -> n.getType() == EntityType.BEE));
-    this.addProduce(
-        new MobCollectorMachineRecipe(new ItemStack(Material.GLASS_BOTTLE, this.getSpeed()),
-            new ItemStack(Material.INK_SAC, this.getSpeed()),
-            (n) -> n.getType() == EntityType.SQUID));
-    this.addProduce(
-        new MobCollectorMachineRecipe(new ItemStack(Material.GLASS_BOTTLE, this.getSpeed()),
-            new ItemStack(Material.GLOW_INK_SAC, this.getSpeed()),
-            (n) -> n.getType() == EntityType.GLOW_SQUID));
-    this.addProduce(
-        new MobCollectorMachineRecipe(new ItemStack(Material.GLASS_BOTTLE, this.getSpeed()),
-            new SlimefunItemStack(SlimefunItems.FILLED_FLASK_OF_KNOWLEDGE, this.getSpeed()),
-            (n) -> n.getType() == EntityType.WITHER));
-    this.addProduce(
-        new MobCollectorMachineRecipe(new ItemStack(Material.GLASS_BOTTLE, this.getSpeed()),
-            new ItemStack(Material.DRAGON_BREATH, this.getSpeed()),
-            (n) -> n.getType() == EntityType.ENDER_DRAGON));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.HONEYCOMB, this.getSpeed()), (n) -> n.getType() == EntityType.BEE));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.WHITE_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.WHITE));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.ORANGE_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.ORANGE));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.MAGENTA_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.MAGENTA));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.LIGHT_BLUE_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.LIGHT_BLUE));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.YELLOW_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.YELLOW));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.LIME_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.LIME));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.PINK_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.PINK));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.GRAY_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.GRAY));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.LIGHT_GRAY_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.LIGHT_GRAY));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.CYAN_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.CYAN));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.PURPLE_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.PURPLE));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.BLUE_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.BLUE));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.BROWN_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.BROWN));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.GREEN_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.GREEN));
-    this.addProduce(
-        new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-            new ItemStack(Material.RED_WOOL, this.getSpeed()),
-            (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.RED));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.BLACK_WOOL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.BLACK));
-    this.addProduce(
-        new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-            new ItemStack(Material.LEATHER, this.getSpeed()),
-            (n) -> n.getType() == EntityType.COW));
-    this.addProduce(
-        new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-            new ItemStack(Material.FEATHER, this.getSpeed()),
-            (n) -> n.getType() == EntityType.CHICKEN));
-    this.addProduce(
-        new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-            new ItemStack(Material.SPONGE, this.getSpeed()),
-            (n) -> n.getType() == EntityType.GUARDIAN));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new ItemStack(Material.SPIDER_EYE, this.getSpeed()),
-        (n) -> n.getType() == EntityType.SPIDER));
-    this.addProduce(
-        new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-            new ItemStack(Material.COAL, this.getSpeed()),
-            (n) -> n.getType() == EntityType.WITHER_SKELETON));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-        new SlimefunItemStack(SlimefunItems.COMPRESSED_CARBON, this.getSpeed()),
-        (n) -> n.getType() == EntityType.WITHER));
+    recipes.clear();
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.GLASS_BOTTLE, getSpeed()),
+        new ItemStack(Material.HONEY_BOTTLE, getSpeed()), n -> n.getType() == EntityType.BEE));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.GLASS_BOTTLE, getSpeed()),
+        new ItemStack(Material.INK_SAC, getSpeed()), n -> n.getType() == EntityType.SQUID));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.GLASS_BOTTLE, getSpeed()),
+        new ItemStack(Material.GLOW_INK_SAC, getSpeed()), n -> n.getType() == EntityType.GLOW_SQUID));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.GLASS_BOTTLE, getSpeed()),
+        new SlimefunItemStack(SlimefunItems.FILLED_FLASK_OF_KNOWLEDGE, getSpeed()),
+        n -> n.getType() == EntityType.WITHER));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.GLASS_BOTTLE, getSpeed()),
+        new ItemStack(Material.DRAGON_BREATH, getSpeed()), n -> n.getType() == EntityType.ENDER_DRAGON));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.HONEYCOMB, getSpeed()), n -> n.getType() == EntityType.BEE));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.WHITE_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.WHITE));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.ORANGE_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.ORANGE));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.MAGENTA_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.MAGENTA));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.LIGHT_BLUE_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.LIGHT_BLUE));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.YELLOW_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.YELLOW));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.LIME_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.LIME));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.PINK_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.PINK));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.GRAY_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.GRAY));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.LIGHT_GRAY_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.LIGHT_GRAY));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.CYAN_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.CYAN));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.PURPLE_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.PURPLE));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.BLUE_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.BLUE));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.BROWN_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.BROWN));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.GREEN_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.GREEN));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.RED_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.RED));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.BLACK_WOOL, getSpeed()),
+        n -> n.getType() == EntityType.SHEEP && ((Sheep) n).getColor() == DyeColor.BLACK));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.LEATHER, getSpeed()), n -> n.getType() == EntityType.COW));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.FEATHER, getSpeed()), n -> n.getType() == EntityType.CHICKEN));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.SPONGE, getSpeed()), n -> n.getType() == EntityType.GUARDIAN));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.SPIDER_EYE, getSpeed()), n -> n.getType() == EntityType.SPIDER));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new ItemStack(Material.COAL, getSpeed()), n -> n.getType() == EntityType.WITHER_SKELETON));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+        new SlimefunItemStack(SlimefunItems.COMPRESSED_CARBON, getSpeed()), n -> n.getType() == EntityType.WITHER));
     if (!customBc) {
-      this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
-          new SlimefunItemStack(SlimefunItems.BASIC_CIRCUIT_BOARD, this.getSpeed()),
-          (n) -> n.getType() == EntityType.IRON_GOLEM));
+      addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.SHEARS),
+          new SlimefunItemStack(SlimefunItems.BASIC_CIRCUIT_BOARD, getSpeed()),
+          n -> n.getType() == EntityType.IRON_GOLEM));
     }
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.PHANTOM_MEMBRANE, this.getSpeed()),
-        (n) -> n.getType() == EntityType.PHANTOM));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.ROTTEN_FLESH, this.getSpeed()),
-        (n) -> n.getType() == EntityType.ZOMBIE));
-    this.addProduce(
-        new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-            new ItemStack(Material.BONE, this.getSpeed()),
-            (n) -> n.getType() == EntityType.SKELETON));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.GUNPOWDER, this.getSpeed()),
-        (n) -> n.getType() == EntityType.CREEPER));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.PHANTOM_MEMBRANE, getSpeed()), n -> n.getType() == EntityType.PHANTOM));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.ROTTEN_FLESH, getSpeed()), n -> n.getType() == EntityType.ZOMBIE));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.BONE, getSpeed()), n -> n.getType() == EntityType.SKELETON));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.GUNPOWDER, getSpeed()), n -> n.getType() == EntityType.CREEPER));
     if (!customBc) {
-      this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-          new ItemStack(Material.SLIME_BALL, this.getSpeed()),
-          (n) -> n.getType() == EntityType.SLIME));
+      addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+          new ItemStack(Material.SLIME_BALL, getSpeed()), n -> n.getType() == EntityType.SLIME));
     }
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.STRING, this.getSpeed()), (n) -> n.getType() == EntityType.SPIDER));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.STRING, getSpeed()), n -> n.getType() == EntityType.SPIDER));
     if (!customBc) {
-      this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-          new ItemStack(Material.WITHER_SKELETON_SKULL, this.getSpeed()),
-          (n) -> n.getType() == EntityType.WITHER_SKELETON));
+      addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+          new ItemStack(Material.WITHER_SKELETON_SKULL, getSpeed()),
+          n -> n.getType() == EntityType.WITHER_SKELETON));
     }
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.ENDER_PEARL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.ENDERMAN));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.BLAZE_ROD, this.getSpeed()),
-        (n) -> n.getType() == EntityType.BLAZE));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.MAGMA_CREAM, this.getSpeed()),
-        (n) -> n.getType() == EntityType.MAGMA_CUBE));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.ENDER_PEARL, getSpeed()), n -> n.getType() == EntityType.ENDERMAN));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.BLAZE_ROD, getSpeed()), n -> n.getType() == EntityType.BLAZE));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.MAGMA_CREAM, getSpeed()), n -> n.getType() == EntityType.MAGMA_CUBE));
     if (!customBc) {
-      this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-          new ItemStack(Material.NETHER_STAR, this.getSpeed()),
-          (n) -> n.getType() == EntityType.WITHER));
-      this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-          new ItemStack(Material.GHAST_TEAR, this.getSpeed()),
-          (n) -> n.getType() == EntityType.GHAST));
-      this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-          new ItemStack(Material.TOTEM_OF_UNDYING, this.getSpeed()),
-          (n) -> n.getType() == EntityType.RAVAGER));
+      addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+          new ItemStack(Material.NETHER_STAR, getSpeed()), n -> n.getType() == EntityType.WITHER));
+      addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+          new ItemStack(Material.GHAST_TEAR, getSpeed()), n -> n.getType() == EntityType.GHAST));
+      addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+          new ItemStack(Material.TOTEM_OF_UNDYING, getSpeed()), n -> n.getType() == EntityType.RAVAGER));
     }
-    this.addProduce(
-        new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-            new ItemStack(Material.BEEF, this.getSpeed()),
-            (n) -> n.getType() == EntityType.COW));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.PORKCHOP, this.getSpeed()), (n) -> n.getType() == EntityType.PIG));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.CHICKEN, this.getSpeed()),
-        (n) -> n.getType() == EntityType.CHICKEN));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.MUTTON, this.getSpeed()), (n) -> n.getType() == EntityType.SHEEP));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.SNOWBALL, this.getSpeed()),
-        (n) -> {
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.BEEF, getSpeed()), n -> n.getType() == EntityType.COW));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.PORKCHOP, getSpeed()), n -> n.getType() == EntityType.PIG));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.CHICKEN, getSpeed()), n -> n.getType() == EntityType.CHICKEN));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.MUTTON, getSpeed()), n -> n.getType() == EntityType.SHEEP));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.SNOWBALL, getSpeed()), n -> {
           String entityType = n.getType().name();
           return "SNOW_GOLEM".equals(entityType) || "SNOWMAN".equals(entityType);
         }));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.IRON_INGOT, this.getSpeed()),
-        (n) -> n.getType() == EntityType.IRON_GOLEM));
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.NAUTILUS_SHELL, this.getSpeed()),
-        (n) -> n.getType() == EntityType.DROWNED));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.IRON_INGOT, getSpeed()), n -> n.getType() == EntityType.IRON_GOLEM));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.NAUTILUS_SHELL, getSpeed()), n -> n.getType() == EntityType.DROWNED));
     if (!customBc) {
-      this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-          new ItemStack(Material.PRISMARINE_SHARD, this.getSpeed()),
-          (n) -> n.getType() == EntityType.GUARDIAN));
-      this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-          new ItemStack(Material.PRISMARINE_CRYSTALS, this.getSpeed()),
-          (n) -> n.getType() == EntityType.ELDER_GUARDIAN));
+      addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+          new ItemStack(Material.PRISMARINE_SHARD, getSpeed()), n -> n.getType() == EntityType.GUARDIAN));
+      addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+          new ItemStack(Material.PRISMARINE_CRYSTALS, getSpeed()), n -> n.getType() == EntityType.ELDER_GUARDIAN));
     }
-    this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
-        new ItemStack(Material.GLASS_BOTTLE, this.getSpeed()),
-        (n) -> n.getType() == EntityType.WITCH));
+    addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.IRON_SWORD),
+        new ItemStack(Material.GLASS_BOTTLE, getSpeed()), n -> n.getType() == EntityType.WITCH));
     if (!customBc) {
-      this.addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.GOLD_INGOT),
-              new SlimefunItemStack(SlimefunItems.STRANGE_NETHER_GOO, this.getSpeed()),
-              (n) -> n.getType() == EntityType.PIGLIN));
+      addProduce(new MobCollectorMachineRecipe(new ItemStack(Material.GOLD_INGOT),
+          new SlimefunItemStack(SlimefunItems.STRANGE_NETHER_GOO, getSpeed()),
+          n -> n.getType() == EntityType.PIGLIN));
     }
   }
 
-
   public void addProduce(@Nonnull MobCollectorMachineRecipe produce) {
     Validate.notNull(produce, "A produce cannot be null");
-    this.mobCollectorMachineRecipes.add(produce);
+    mobCollectorMachineRecipes.add(produce);
   }
 
   @Override
@@ -295,7 +265,6 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
   public String getRecipeSectionLabel(@Nonnull Player p) {
     return "&7Collects:";
   }
-
 
   @Override
   protected MachineRecipe findNextRecipe(@Nonnull BlockMenu inv) {
@@ -321,22 +290,18 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
           continue;
         }
         if (isAnimalNearby(block, produce::test)) {
-          // Reserve only the slot reference here. The tool/bottle cost is committed atomically
-          // with the output after processing completes, so no input is lost while power is absent.
           selectedInputSlots.put(block, slot);
           return produce;
         }
       }
     }
-
     return null;
   }
 
   @ParametersAreNonnullByDefault
   private boolean isAnimalNearby(Block b, Predicate<LivingEntity> predicate) {
-    return !b.getWorld().getNearbyEntities(b.getLocation(), mobRange, mobRange, mobRange, (n) -> {
-      return this.isValidAnimal(n, predicate);
-    }).isEmpty();
+    return !b.getWorld().getNearbyEntities(b.getLocation(), mobRange, mobRange, mobRange,
+        n -> isValidAnimal(n, predicate)).isEmpty();
   }
 
   @ParametersAreNonnullByDefault
@@ -345,7 +310,7 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
   }
 
   public final MobCollector setMobRange(int value) {
-    this.mobRange = value;
+    mobRange = value;
     return this;
   }
 
@@ -356,12 +321,21 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
       return;
     }
 
+    restoreStateIfNeeded(b);
     MachineRecipe active = processing.get(b);
     if (active == null) {
       MachineRecipe next = findNextRecipe(inv);
       if (next != null) {
+        Integer slot = selectedInputSlots.get(b);
+        if (slot == null) {
+          clearCollectorState(b);
+          updateStatusInvalidInput(inv);
+          return;
+        }
         processing.put(b, next);
         progress.put(b, next.getTicks());
+        lastProgressCheckpoint.put(b, next.getTicks());
+        persistState(b, next, slot, next.getTicks());
       } else {
         updateStatusReset(inv);
       }
@@ -393,9 +367,10 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
     }
 
     if (takeCharge(b.getLocation())) {
-      ChestMenuUtils.updateProgressbar(inv, getStatusSlot(), timeLeft, active.getTicks(),
-          getProgressBar());
-      progress.put(b, Math.max(timeLeft - getSpeed(), 0));
+      ChestMenuUtils.updateProgressbar(inv, getStatusSlot(), timeLeft, active.getTicks(), getProgressBar());
+      int nextProgress = Math.max(timeLeft - getSpeed(), 0);
+      progress.put(b, nextProgress);
+      checkpointProgress(b, nextProgress, active.getTicks());
     }
   }
 
@@ -435,15 +410,104 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
     return true;
   }
 
+  private void persistState(Block block, MachineRecipe recipe, int slot, int currentProgress) {
+    SupremeSpecialMachineStateCodec.save(block, STATE_TYPE, currentProgress, recipe.getTicks(),
+        recipe.getInput(), recipe.getOutput(), new ItemStack[0], slot, "");
+  }
+
+  private void checkpointProgress(Block block, int currentProgress, int totalTicks) {
+    int previous = lastProgressCheckpoint.getOrDefault(block, totalTicks);
+    if (currentProgress <= 0 || Math.abs(previous - currentProgress) >= PROGRESS_CHECKPOINT_INTERVAL) {
+      SupremeSpecialMachineStateCodec.saveProgress(block, STATE_TYPE, currentProgress);
+      lastProgressCheckpoint.put(block, currentProgress);
+    }
+  }
+
+  private boolean restoreStateIfNeeded(Block block) {
+    if (processing.containsKey(block)) {
+      return true;
+    }
+    if (!SupremeSpecialMachineStateCodec.hasState(block, STATE_TYPE)) {
+      return false;
+    }
+
+    Optional<SupremeSpecialMachineStateCodec.State> restored =
+        SupremeSpecialMachineStateCodec.load(block, STATE_TYPE);
+    if (restored.isPresent()) {
+      SupremeSpecialMachineStateCodec.State state = restored.get();
+      if (state.inputs().length > 0 && state.outputs().length > 0 && state.auxInt() >= 0) {
+        MachineRecipe recipe = new MachineRecipe(state.ticks(), state.inputs(), state.outputs());
+        processing.put(block, recipe);
+        progress.put(block, Math.max(0, state.progress()));
+        selectedInputSlots.put(block, state.auxInt());
+        lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
+        return true;
+      }
+    }
+
+    SupremeSpecialMachineStateCodec.clear(block);
+    return false;
+  }
+
   private void clearCollectorState(Block block) {
     processing.remove(block);
     progress.remove(block);
     selectedInputSlots.remove(block);
+    lastProgressCheckpoint.remove(block);
+    SupremeSpecialMachineStateCodec.clear(block);
   }
 
   @Override
   protected void onMachineBreak(Block block) {
     clearCollectorState(block);
+  }
+
+  @Override
+  public List<String> getMachineDiagnosticLines(Block block) {
+    List<String> lines = new ArrayList<>();
+    BlockMenu inv = BlockStorage.getInventory(block);
+    lines.add("Machine: " + getId() + " (MOB_COLLECTOR)");
+    lines.add("Charge: " + getCharge(block.getLocation()) + " J | Consumption: "
+        + UtilEnergy.toPerSecond(getEnergyConsumption()) + " J/s");
+    if (inv == null) {
+      lines.add("No Slimefun inventory is loaded for this block.");
+      return lines;
+    }
+
+    restoreStateIfNeeded(block);
+    MachineRecipe active = processing.get(block);
+    if (active == null) {
+      lines.add("State: IDLE / waiting for valid tool and nearby mob");
+      lines.add("Mob scan range: " + mobRange + " blocks");
+      return lines;
+    }
+
+    int timeLeft = progress.getOrDefault(block, active.getTicks());
+    String state;
+    if (notHasSpaceOutput(inv, active.getOutput())) {
+      state = "OUTPUT FULL";
+    } else if (getCharge(block.getLocation()) < getEnergyConsumption() && timeLeft > 0) {
+      state = "WAITING FOR POWER";
+    } else if (timeLeft <= 0) {
+      state = "READY TO COMMIT INPUT/OUTPUT";
+    } else {
+      state = "PROCESSING";
+    }
+    lines.add("State: " + state + " | Progress: " + timeLeft + "/" + active.getTicks());
+    if (active.getInput().length > 0 && active.getInput()[0] != null) {
+      lines.add("Input: " + describeItem(active.getInput()[0]) + " x" + active.getInput()[0].getAmount()
+          + " | Slot: " + selectedInputSlots.getOrDefault(block, -1));
+    }
+    if (active.getOutput().length > 0 && active.getOutput()[0] != null) {
+      lines.add("Output: " + describeItem(active.getOutput()[0]) + " x" + active.getOutput()[0].getAmount());
+    }
+    lines.add("Mob scan range: " + mobRange + " blocks");
+    return lines;
+  }
+
+  private String describeItem(ItemStack item) {
+    SlimefunItem slimefunItem = SlimefunItem.getByItem(item);
+    return slimefunItem != null ? slimefunItem.getId() : item.getType().getKey().toString();
   }
 
   @Nonnull
@@ -464,5 +528,4 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine {
   public boolean isProcessing(Block b) {
     return getProcessing(b) != null;
   }
-
 }

@@ -1,14 +1,16 @@
 package com.github.relativobr.supreme.machine;
 
-import com.github.relativobr.supreme.util.UtilEnergy;
 import com.github.relativobr.supreme.compat.SupremeBlockTicker;
 import com.github.relativobr.supreme.generic.machine.SimpleItemWithLargeContainerMachine;
+import com.github.relativobr.supreme.generic.machine.SupremeMachineDiagnostics;
 import com.github.relativobr.supreme.machine.recipe.VirtualGardenMachineRecipe;
 import com.github.relativobr.supreme.resource.SupremeComponents;
 import com.github.relativobr.supreme.resource.magical.SupremeAttribute;
 import com.github.relativobr.supreme.resource.magical.SupremeCetrus;
 import com.github.relativobr.supreme.util.SupremeInventoryUtils;
 import com.github.relativobr.supreme.util.SupremeItemStack;
+import com.github.relativobr.supreme.util.SupremeSpecialMachineStateCodec;
+import com.github.relativobr.supreme.util.UtilEnergy;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -16,6 +18,7 @@ import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.MachineTier;
 import io.github.thebusybiscuit.slimefun4.core.attributes.MachineType;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
+import io.github.thebusybiscuit.slimefun4.libraries.commons.lang.Validate;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
 import io.github.thebusybiscuit.slimefun4.utils.LoreBuilder;
@@ -25,19 +28,23 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.MachineRecipe;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
-import io.github.thebusybiscuit.slimefun4.libraries.commons.lang.Validate;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
-public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
+public class VirtualGarden extends SimpleItemWithLargeContainerMachine
+    implements SupremeMachineDiagnostics {
+
+  private static final String STATE_TYPE = "VIRTUAL_GARDEN";
+  private static final int PROGRESS_CHECKPOINT_INTERVAL = 20;
 
   public static final SlimefunItemStack VIRTUAL_GARDEN_MACHINE = new SupremeItemStack("SUPREME_VIRTUAL_GARDEN_I",
       Material.STRIPPED_WARPED_HYPHAE, "&bVirtual Garden", "", "&fThis machine allows you to",
@@ -69,50 +76,41 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
 
   private final Map<Block, MachineRecipe> processing = new HashMap<>();
   private final Map<Block, Integer> progress = new HashMap<>();
-  private final Set<VirtualGardenMachineRecipe> virtualGardenMachineRecipes = new HashSet();
+  private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
+  private final Set<VirtualGardenMachineRecipe> virtualGardenMachineRecipes = new HashSet<>();
 
   @ParametersAreNonnullByDefault
   public VirtualGarden(ItemGroup category, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
     super(category, item, recipeType, recipe);
   }
 
-
   @Override
   protected void registerDefaultRecipes() {
-    this.recipes.clear();
-    VirtualGardenMachineRecipe.getAllRecipe()
-        .stream().filter(Objects::nonNull)
-        .forEach(recipe -> {
-      this.addProduce(new VirtualGardenMachineRecipe(recipe));
-    });
+    recipes.clear();
+    VirtualGardenMachineRecipe.getAllRecipe().stream().filter(Objects::nonNull)
+        .forEach(recipe -> addProduce(new VirtualGardenMachineRecipe(recipe)));
   }
-
 
   public void addProduce(@Nonnull VirtualGardenMachineRecipe produce) {
     Validate.notNull(produce, "A produce cannot be null");
-    this.virtualGardenMachineRecipes.add(produce);
+    virtualGardenMachineRecipes.add(produce);
   }
-
 
   @Nonnull
   @Override
   public List<ItemStack> getDisplayRecipes() {
-    List<ItemStack> displayRecipes = new ArrayList();
-    VirtualGardenMachineRecipe.getAllRecipe()
-        .stream().filter(Objects::nonNull)
-        .forEach(recipe -> {
+    List<ItemStack> displayRecipes = new ArrayList<>();
+    VirtualGardenMachineRecipe.getAllRecipe().stream().filter(Objects::nonNull).forEach(recipe -> {
       displayRecipes.add(new CustomItemStack(recipe.getFirstMaterialInput(), null, "&fRequires &bto cultivate"));
       displayRecipes.add(new ItemStack(recipe.getFirstMaterialOutput()));
     });
     return displayRecipes;
   }
 
-
   @Override
   public void preRegister() {
     addItemHandler(new SupremeBlockTicker(true, this::tick));
   }
-
 
   @Nonnull
   @Override
@@ -122,11 +120,10 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
 
   @Override
   protected MachineRecipe findNextRecipe(@Nonnull BlockMenu inv) {
-    int[] inputSlots = this.getInputSlots();
-    for (int slot : inputSlots) {
-      for (VirtualGardenMachineRecipe produce : this.virtualGardenMachineRecipes) {
+    for (int slot : getInputSlots()) {
+      for (VirtualGardenMachineRecipe produce : virtualGardenMachineRecipes) {
         ItemStack itemInSlot = inv.getItemInSlot(slot);
-        final ItemStack itemInInput = produce.getInput()[0];
+        ItemStack itemInInput = produce.getInput()[0];
         if (itemInSlot != null && itemInInput != null
             && itemInSlot.getType() == itemInInput.getType()
             && SupremeInventoryUtils.canFit(inv, getOutputSlots(), produce.getOutput())) {
@@ -144,12 +141,15 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
       return;
     }
 
+    restoreStateIfNeeded(b);
     MachineRecipe active = processing.get(b);
     if (active == null) {
       MachineRecipe next = findNextRecipe(inv);
       if (next != null) {
         processing.put(b, next);
         progress.put(b, next.getTicks());
+        lastProgressCheckpoint.put(b, next.getTicks());
+        persistState(b, next, next.getTicks());
       } else {
         updateStatusReset(inv);
       }
@@ -165,8 +165,7 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
     int timeLeft = progress.getOrDefault(b, active.getTicks());
     if (timeLeft <= 0) {
       SupremeInventoryUtils.pushAll(inv, getOutputSlots(), recipeOutput);
-      processing.remove(b);
-      progress.remove(b);
+      clearState(b);
       updateStatusReset(inv);
       return;
     }
@@ -177,16 +176,106 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
     }
 
     if (takeCharge(b.getLocation())) {
-      ChestMenuUtils.updateProgressbar(inv, getStatusSlot(), timeLeft, active.getTicks(),
-          getProgressBar());
-      progress.put(b, Math.max(timeLeft - getSpeed(), 0));
+      ChestMenuUtils.updateProgressbar(inv, getStatusSlot(), timeLeft, active.getTicks(), getProgressBar());
+      int nextProgress = Math.max(timeLeft - getSpeed(), 0);
+      progress.put(b, nextProgress);
+      checkpointProgress(b, nextProgress, active.getTicks());
     }
+  }
+
+  private void persistState(Block block, MachineRecipe recipe, int currentProgress) {
+    SupremeSpecialMachineStateCodec.save(block, STATE_TYPE, currentProgress, recipe.getTicks(),
+        recipe.getInput(), recipe.getOutput(), new ItemStack[0], -1, "");
+  }
+
+  private void checkpointProgress(Block block, int currentProgress, int totalTicks) {
+    int previous = lastProgressCheckpoint.getOrDefault(block, totalTicks);
+    if (currentProgress <= 0 || Math.abs(previous - currentProgress) >= PROGRESS_CHECKPOINT_INTERVAL) {
+      SupremeSpecialMachineStateCodec.saveProgress(block, STATE_TYPE, currentProgress);
+      lastProgressCheckpoint.put(block, currentProgress);
+    }
+  }
+
+  private boolean restoreStateIfNeeded(Block block) {
+    if (processing.containsKey(block)) {
+      return true;
+    }
+    if (!SupremeSpecialMachineStateCodec.hasState(block, STATE_TYPE)) {
+      return false;
+    }
+
+    Optional<SupremeSpecialMachineStateCodec.State> restored =
+        SupremeSpecialMachineStateCodec.load(block, STATE_TYPE);
+    if (restored.isPresent()) {
+      SupremeSpecialMachineStateCodec.State state = restored.get();
+      if (state.outputs().length > 0) {
+        MachineRecipe recipe = new MachineRecipe(state.ticks(), state.inputs(), state.outputs());
+        processing.put(block, recipe);
+        progress.put(block, Math.max(0, state.progress()));
+        lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
+        return true;
+      }
+    }
+
+    SupremeSpecialMachineStateCodec.clear(block);
+    return false;
+  }
+
+  private void clearState(Block block) {
+    processing.remove(block);
+    progress.remove(block);
+    lastProgressCheckpoint.remove(block);
+    SupremeSpecialMachineStateCodec.clear(block);
   }
 
   @Override
   protected void onMachineBreak(Block block) {
-    processing.remove(block);
-    progress.remove(block);
+    clearState(block);
+  }
+
+  @Override
+  public List<String> getMachineDiagnosticLines(Block block) {
+    List<String> lines = new ArrayList<>();
+    BlockMenu inv = BlockStorage.getInventory(block);
+    lines.add("Machine: " + getId() + " (VIRTUAL_GARDEN)");
+    lines.add("Charge: " + getCharge(block.getLocation()) + " J | Consumption: "
+        + UtilEnergy.toPerSecond(getEnergyConsumption()) + " J/s");
+    if (inv == null) {
+      lines.add("No Slimefun inventory is loaded for this block.");
+      return lines;
+    }
+
+    restoreStateIfNeeded(block);
+    MachineRecipe active = processing.get(block);
+    if (active == null) {
+      lines.add("State: IDLE / waiting for cultivation input");
+      return lines;
+    }
+
+    int timeLeft = progress.getOrDefault(block, active.getTicks());
+    String state;
+    if (notHasSpaceOutput(inv, active.getOutput())) {
+      state = "OUTPUT FULL";
+    } else if (getCharge(block.getLocation()) < getEnergyConsumption() && timeLeft > 0) {
+      state = "WAITING FOR POWER";
+    } else if (timeLeft <= 0) {
+      state = "READY TO OUTPUT";
+    } else {
+      state = "PROCESSING";
+    }
+    lines.add("State: " + state + " | Progress: " + timeLeft + "/" + active.getTicks());
+    if (active.getInput().length > 0 && active.getInput()[0] != null) {
+      lines.add("Cultivation input: " + describeItem(active.getInput()[0]));
+    }
+    if (active.getOutput().length > 0 && active.getOutput()[0] != null) {
+      lines.add("Output: " + describeItem(active.getOutput()[0]) + " x" + active.getOutput()[0].getAmount());
+    }
+    return lines;
+  }
+
+  private String describeItem(ItemStack item) {
+    SlimefunItem slimefunItem = SlimefunItem.getByItem(item);
+    return slimefunItem != null ? slimefunItem.getId() : item.getType().getKey().toString();
   }
 
   @Nonnull
@@ -207,5 +296,4 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine {
   public boolean isProcessing(Block b) {
     return getProcessing(b) != null;
   }
-
 }
