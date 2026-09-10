@@ -39,6 +39,8 @@ import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.inventory.DirtyChestMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
@@ -159,7 +161,13 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
     int reservedAmount = countMapAmount(reservedItems, requiredTemplate);
     if (reservedAmount >= requiredAmount) {
-      return new int[0];
+      // Networks Expansion has a compatibility fallback for older Supreme builds that may broaden an
+      // empty result back to every physical input slot. If a late delivery already raced into this
+      // machine, return that full stack as an intentional zero-capacity sentinel instead. This makes
+      // transport stop at the first raced stack instead of filling the rest of the inventory while the
+      // recipe is already fully reserved/processing.
+      int fullMatchingSlot = findFullMatchingInputSlot(menu, requiredTemplate);
+      return fullMatchingSlot >= 0 ? new int[]{fullMatchingSlot} : new int[0];
     }
 
     List<Integer> partialMatching = new LinkedList<>();
@@ -199,6 +207,19 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     }
 
     return firstEmptySlot >= 0 ? new int[]{firstEmptySlot} : new int[0];
+  }
+
+  private int findFullMatchingInputSlot(DirtyChestMenu menu, ItemStack requiredTemplate) {
+    for (int slot : getInputSlots()) {
+      ItemStack stack = menu.getItemInSlot(slot);
+      if (stack != null
+          && !stack.getType().isAir()
+          && stack.getAmount() >= stack.getMaxStackSize()
+          && SlimefunUtils.isItemSimilar(stack, requiredTemplate, false, false)) {
+        return slot;
+      }
+    }
+    return -1;
   }
 
   /**
@@ -702,12 +723,29 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         ItemStack returnItem = consumedItem.clone();
         returnItem.setAmount(stackSize);
         ItemStack leftover = inv.pushItem(returnItem, getInputSlots());
-        if (leftover != null && b.getWorld() != null) {
-          b.getWorld().dropItemNaturally(b.getLocation(), leftover);
+        if (leftover != null) {
+          dropItemNaturallySafe(b, leftover);
         }
         amount -= stackSize;
       }
     }
+  }
+
+  /**
+   * Slimefun's normal AContainer ticker is asynchronous on Paper/Purpur. Entity creation is not, so
+   * rollback overflow must hop to the owning region instead of calling World#dropItemNaturally from
+   * the ticker thread. Paper's region scheduler also maps correctly on regular Paper/Purpur and keeps
+   * this path ready for Folia-style region ownership.
+   */
+  private void dropItemNaturallySafe(Block block, ItemStack item) {
+    if (item == null || item.getType().isAir() || item.getAmount() <= 0) {
+      return;
+    }
+
+    Location location = block.getLocation();
+    ItemStack dropped = item.clone();
+    Bukkit.getRegionScheduler().execute(Supreme.inst(), location,
+        () -> location.getWorld().dropItemNaturally(location, dropped));
   }
 
   private void dropConsumedItems(Block block) {
@@ -726,7 +764,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         int stackSize = Math.min(Math.max(1, item.getMaxStackSize()), amount);
         ItemStack dropped = item.clone();
         dropped.setAmount(stackSize);
-        block.getWorld().dropItemNaturally(block.getLocation(), dropped);
+        dropItemNaturallySafe(block, dropped);
         amount -= stackSize;
       }
     }
