@@ -132,6 +132,13 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       restorePersistentStateIfNeeded(block, blockMenu);
       MachineRecipe activeRecipe = getProcessing(block);
       if (activeRecipe != null) {
+        if (isRollbackPending(block)) {
+          // During rollback, transport must not steal newly freed input space before the staged
+          // ingredients have been restored. The status slot is permanently occupied and therefore
+          // acts as a zero-capacity sentinel even for transport implementations that broaden an
+          // empty slot response back to the machine's normal inputs.
+          return new int[]{getStatusSlot()};
+        }
         selectedRecipe = activeRecipe.getInput();
         reservedItems = getConsumedItems(block);
       }
@@ -162,12 +169,11 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     int reservedAmount = countMapAmount(reservedItems, requiredTemplate);
     if (reservedAmount >= requiredAmount) {
       // Networks Expansion has a compatibility fallback for older Supreme builds that may broaden an
-      // empty result back to every physical input slot. If a late delivery already raced into this
-      // machine, return that full stack as an intentional zero-capacity sentinel instead. This makes
-      // transport stop at the first raced stack instead of filling the rest of the inventory while the
-      // recipe is already fully reserved/processing.
+      // empty result back to every physical input slot. Prefer a full matching slot as the intentional
+      // zero-capacity sentinel; when no such stack is visible, use the permanently occupied status
+      // slot so late same-item deliveries still cannot refill the machine while processing.
       int fullMatchingSlot = findFullMatchingInputSlot(menu, requiredTemplate);
-      return fullMatchingSlot >= 0 ? new int[]{fullMatchingSlot} : new int[0];
+      return new int[]{fullMatchingSlot >= 0 ? fullMatchingSlot : getStatusSlot()};
     }
 
     List<Integer> partialMatching = new LinkedList<>();
@@ -298,7 +304,11 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         BlockMenu inv = BlockStorage.getInventory(b);
         if (inv != null) {
           restorePersistentStateIfNeeded(b, inv);
-          revertConsumedItem(b, inv);
+          if (!revertConsumedItem(b, inv)) {
+            // A deliberate block break is allowed to spill only the still-hidden remainder. Normal
+            // machine rollback never uses this path and instead waits for inventory room.
+            dropConsumedItems(b);
+          }
           inv.dropItems(b.getLocation(), getInputSlots());
           inv.dropItems(b.getLocation(), getOutputSlots());
         } else {
@@ -342,6 +352,11 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
   protected void updateStatusOutputFull(BlockMenu menu) {
     menu.replaceExistingItem(getStatusSlot(), getDisplayOrWarn(null, "&cOutput is full"));
+  }
+
+  protected void updateStatusRollbackBlocked(BlockMenu menu) {
+    menu.replaceExistingItem(getStatusSlot(),
+        getDisplayOrWarn(null, "&cInput full - clear a slot to recover staged material"));
   }
 
   protected void updateStatusConnectEnergy(BlockMenu menu, ItemStack itemStack) {
@@ -557,7 +572,12 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
     ItemStack[] result = recipe.getOutput();
     if (result == null || result.length == 0) {
-      revertConsumedItem(b, inv);
+      markRollbackPending(b);
+      if (!revertConsumedItem(b, inv)) {
+        updateStatusRollbackBlocked(inv);
+        backoff(b);
+        return;
+      }
       removeMapBlock(b);
       updateStatusReset(inv);
       return;
@@ -599,15 +619,32 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return;
     }
 
+    if (isRollbackPending(b)) {
+      if (!revertConsumedItem(b, inv)) {
+        updateStatusRollbackBlocked(inv);
+        backoff(b);
+        return;
+      }
+      removeMapBlock(b);
+      updateStatusInvalidInput(inv);
+      return;
+    }
+
     int stagedThisTick = reserveAvailableInputBatch(b, inv, recipe.getInput());
     if (!hasAllReservedInputs(b, recipe.getInput())) {
       int attempts = stagedThisTick > 0 ? 0 : attemptCount.getOrDefault(b, 0) + 1;
-      int maxAttempts = Math.max(1,
-          Supreme.getSupremeOptions().getMachineMaxAttemptConsumed());
+      int maxAttempts = getMaxAttemptConsumed();
 
       if (attempts >= maxAttempts) {
-        // A stalled partial recipe is rolled back instead of being kept invisible forever.
-        revertConsumedItem(b, inv);
+        // Enter a persistent rollback state. Transport is blocked while rollback is pending, and
+        // reserved inputs stay hidden until the machine can restore all of them without spilling.
+        attemptCount.put(b, maxAttempts);
+        SupremeMachineStateCodec.saveAttempts(b, maxAttempts);
+        if (!revertConsumedItem(b, inv)) {
+          updateStatusRollbackBlocked(inv);
+          backoff(b);
+          return;
+        }
         removeMapBlock(b);
         updateStatusInvalidInput(inv);
         return;
@@ -622,7 +659,12 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     }
 
     if (!canStartProcess(b, inv, recipe)) {
-      revertConsumedItem(b, inv);
+      markRollbackPending(b);
+      if (!revertConsumedItem(b, inv)) {
+        updateStatusRollbackBlocked(inv);
+        backoff(b);
+        return;
+      }
       removeMapBlock(b);
       updateStatusInvalidInput(inv);
       return;
@@ -647,6 +689,22 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     attemptCount.put(b, 0);
     heavyCheckAfter.remove(b);
     persistState(b);
+  }
+
+  private int getMaxAttemptConsumed() {
+    return Math.max(1, Supreme.getSupremeOptions().getMachineMaxAttemptConsumed());
+  }
+
+  private boolean isRollbackPending(Block b) {
+    Map<ItemStack, Integer> consumedItems = consumedItemsMap.get(b);
+    return attemptCount.getOrDefault(b, 0) >= getMaxAttemptConsumed()
+        && consumedItems != null && !consumedItems.isEmpty();
+  }
+
+  private void markRollbackPending(Block b) {
+    int maxAttempts = getMaxAttemptConsumed();
+    attemptCount.put(b, maxAttempts);
+    SupremeMachineStateCodec.saveAttempts(b, maxAttempts);
   }
 
   /**
@@ -699,17 +757,87 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     return totalConsumedNow;
   }
 
-  private void revertConsumedItem(Block b, BlockMenu inv) {
+  /**
+   * Attempts to restore every hidden staged input to the visible input inventory.
+   *
+   * <p>Normal rollback is deliberately lossless and spill-free. If the visible inputs do not have
+   * enough capacity, nothing is moved and the machine stays in persistent rollback mode. A user can
+   * clear a slot and the ticker will retry. If a concurrent transport race changes the inventory
+   * after the capacity preflight, only the still-hidden remainder stays reserved for the next retry.</p>
+   */
+  private boolean revertConsumedItem(Block b, BlockMenu inv) {
     Map<ItemStack, Integer> consumedItems = consumedItemsMap.get(b);
     if (consumedItems == null || consumedItems.isEmpty()) {
-      return;
+      return true;
     }
 
-    returnConsumedMap(b, inv, consumedItems);
+    if (!canReturnConsumedMap(inv, consumedItems)) {
+      return false;
+    }
+
+    Map<ItemStack, Integer> leftovers = returnConsumedMap(inv, consumedItems);
     consumedItems.clear();
+    consumedItems.putAll(leftovers);
+
+    if (!consumedItems.isEmpty()) {
+      // A transport write raced the preflight. Keep only the still-hidden remainder and retry later;
+      // attemptCount remains at the rollback sentinel so no new recipe inputs are reserved meanwhile.
+      persistState(b);
+      return false;
+    }
+    return true;
   }
 
-  private void returnConsumedMap(Block b, BlockMenu inv, Map<ItemStack, Integer> consumedItems) {
+  private boolean canReturnConsumedMap(BlockMenu inv, Map<ItemStack, Integer> consumedItems) {
+    List<ItemStack> simulatedSlots = new ArrayList<>(getInputSlots().length);
+    for (int slot : getInputSlots()) {
+      ItemStack existing = inv.getItemInSlot(slot);
+      simulatedSlots.add(existing == null || existing.getType().isAir() ? null : existing.clone());
+    }
+
+    for (Map.Entry<ItemStack, Integer> consumedEntry : consumedItems.entrySet()) {
+      ItemStack consumedItem = consumedEntry.getKey();
+      int remaining = consumedEntry.getValue();
+      if (consumedItem == null || consumedItem.getType().isAir() || remaining <= 0) {
+        continue;
+      }
+
+      for (ItemStack simulated : simulatedSlots) {
+        if (remaining <= 0) {
+          break;
+        }
+        if (simulated == null || simulated.getType().isAir()
+            || !SlimefunUtils.isItemSimilar(simulated, consumedItem, false, false)) {
+          continue;
+        }
+        int capacity = Math.max(0, simulated.getMaxStackSize() - simulated.getAmount());
+        int moved = Math.min(capacity, remaining);
+        simulated.setAmount(simulated.getAmount() + moved);
+        remaining -= moved;
+      }
+
+      for (int i = 0; i < simulatedSlots.size() && remaining > 0; i++) {
+        if (simulatedSlots.get(i) != null) {
+          continue;
+        }
+        int moved = Math.min(Math.max(1, consumedItem.getMaxStackSize()), remaining);
+        ItemStack simulated = consumedItem.clone();
+        simulated.setAmount(moved);
+        simulatedSlots.set(i, simulated);
+        remaining -= moved;
+      }
+
+      if (remaining > 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private Map<ItemStack, Integer> returnConsumedMap(BlockMenu inv,
+      Map<ItemStack, Integer> consumedItems) {
+    Map<ItemStack, Integer> leftovers = new LinkedHashMap<>();
+
     for (Map.Entry<ItemStack, Integer> consumedEntry : consumedItems.entrySet()) {
       ItemStack consumedItem = consumedEntry.getKey();
       int amount = consumedEntry.getValue();
@@ -723,19 +851,19 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         ItemStack returnItem = consumedItem.clone();
         returnItem.setAmount(stackSize);
         ItemStack leftover = inv.pushItem(returnItem, getInputSlots());
-        if (leftover != null) {
-          dropItemNaturallySafe(b, leftover);
+        if (leftover != null && !leftover.getType().isAir() && leftover.getAmount() > 0) {
+          mergeSimilar(leftovers, leftover, leftover.getAmount());
         }
         amount -= stackSize;
       }
     }
+    return leftovers;
   }
 
   /**
    * Slimefun's normal AContainer ticker is asynchronous on Paper/Purpur. Entity creation is not, so
-   * rollback overflow must hop to the owning region instead of calling World#dropItemNaturally from
-   * the ticker thread. Paper's region scheduler also maps correctly on regular Paper/Purpur and keeps
-   * this path ready for Folia-style region ownership.
+   * forced recovery/block-break drops must hop to the owning region instead of calling
+   * World#dropItemNaturally from the ticker thread. Normal recipe rollback never drops items.
    */
   private void dropItemNaturallySafe(Block block, ItemStack item) {
     if (item == null || item.getType().isAir() || item.getAmount() <= 0) {
@@ -748,13 +876,12 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         () -> location.getWorld().dropItemNaturally(location, dropped));
   }
 
-  private void dropConsumedItems(Block block) {
-    Map<ItemStack, Integer> consumedItems = consumedItemsMap.get(block);
-    if (consumedItems == null || consumedItems.isEmpty() || block.getWorld() == null) {
+  private void dropItemMapSafely(Block block, Map<ItemStack, Integer> items) {
+    if (items == null || items.isEmpty() || block.getWorld() == null) {
       return;
     }
 
-    for (Map.Entry<ItemStack, Integer> entry : consumedItems.entrySet()) {
+    for (Map.Entry<ItemStack, Integer> entry : items.entrySet()) {
       ItemStack item = entry.getKey();
       int amount = entry.getValue();
       if (item == null || item.getType().isAir()) {
@@ -768,6 +895,15 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         amount -= stackSize;
       }
     }
+  }
+
+  private void dropConsumedItems(Block block) {
+    Map<ItemStack, Integer> consumedItems = consumedItemsMap.get(block);
+    if (consumedItems == null || consumedItems.isEmpty() || block.getWorld() == null) {
+      return;
+    }
+
+    dropItemMapSafely(block, consumedItems);
     consumedItems.clear();
   }
 
@@ -923,10 +1059,12 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     }
 
     // If the recipe payload was damaged but the reserved-item payload is still readable, return
-    // those items immediately rather than silently discarding them.
+    // those items immediately rather than silently discarding them. A corrupt recipe cannot remain
+    // pending, so only this recovery path is allowed to spill an unreturnable remainder safely.
     Map<ItemStack, Integer> recoverable = SupremeMachineStateCodec.loadConsumedOnly(b);
     if (!recoverable.isEmpty()) {
-      returnConsumedMap(b, inv, recoverable);
+      Map<ItemStack, Integer> leftovers = returnConsumedMap(inv, recoverable);
+      dropItemMapSafely(b, leftovers);
     }
     SupremeMachineStateCodec.clear(b);
     return false;
@@ -960,7 +1098,9 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
     int progress = getProgressTime(block);
     String state;
-    if (notHasSpaceOutput(inv, recipe.getOutput())) {
+    if (isRollbackPending(block)) {
+      state = "ROLLBACK WAITING FOR INPUT SPACE";
+    } else if (notHasSpaceOutput(inv, recipe.getOutput())) {
       state = "OUTPUT FULL";
     } else if (progress == recipe.getTicks() && !hasAllReservedInputs(block, recipe.getInput())) {
       state = "STAGING INPUTS";

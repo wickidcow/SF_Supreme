@@ -19,10 +19,21 @@ fi
 grep -q 'capacitorThorniumCapacity(100000000)' "$JAVA/util/SupremePowerSection.java"
 grep -q 'capacitorSupremeCapacity(1600000000)' "$JAVA/util/SupremePowerSection.java"
 
-grep -q 'flow == ItemTransportFlow.WITHDRAW ? getOutputSlots() : getInputSlots()' \
-  "$JAVA/generic/machine/GenericMachine.java"
-grep -q 'MAX_STAGED_BATCH = 64' "$JAVA/generic/machine/GenericMachine.java"
-grep -q 'SupremeMachineStateCodec.save' "$JAVA/generic/machine/GenericMachine.java"
+GENERIC="$JAVA/generic/machine/GenericMachine.java"
+grep -q 'flow == ItemTransportFlow.WITHDRAW ? getOutputSlots() : getInputSlots()' "$GENERIC"
+grep -q 'MAX_STAGED_BATCH = 64' "$GENERIC"
+grep -q 'SupremeMachineStateCodec.save' "$GENERIC"
+grep -q 'isRollbackPending' "$GENERIC"
+grep -q 'Input full - clear a slot to recover staged material' "$GENERIC"
+grep -q 'canReturnConsumedMap' "$GENERIC"
+grep -q 'Normal recipe rollback never drops items' "$GENERIC"
+grep -q 'return new int\[]{getStatusSlot()};' "$GENERIC"
+
+# Ordinary staged rollback must retain overflow for a later retry instead of spawning entities.
+if awk '/private boolean revertConsumedItem/,/^  }/' "$GENERIC" | grep -q 'dropItemNaturallySafe'; then
+  echo "Normal GenericMachine rollback must not drop item entities." >&2
+  exit 1
+fi
 
 SPECIAL_CODEC="$JAVA/util/SupremeSpecialMachineStateCodec.java"
 grep -q 'STATE_VERSION = "1"' "$SPECIAL_CODEC"
@@ -68,4 +79,4 @@ grep -q 'supreme_armor_thornium_supreme' "$ARMOR"
 
 grep -q 'SupremeMachineDiagnostics diagnostics' "$JAVA/command/SupremeCommand.java"
 
-echo "Supreme machine, persistence, armor, and energy invariants verified."
+echo "Supreme machine, rollback, persistence, armor, and energy invariants verified."

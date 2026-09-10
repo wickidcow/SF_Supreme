@@ -1,5 +1,27 @@
 # Changelog
 
+## Supreme Legacy 1.0.6
+
+### Rollback Backpressure Safety
+
+- Staged GenericMachine rollback no longer spills reserved inputs when Networks or Cargo has filled the visible input inventory.
+- Rollback now enters a persistent waiting state, blocks further automated insertion, and retries only after enough input capacity is available to restore the hidden materials.
+- Added an inventory-capacity preflight so a normal rollback is all-or-nothing whenever possible; a late concurrent transport write keeps only the still-hidden remainder reserved for the next retry.
+- Fully reserved ingredients and rollback-pending machines now return an occupied zero-capacity transport sentinel, preventing compatibility fallbacks from reopening all input slots.
+- `/supreme doctor machine` now reports `ROLLBACK WAITING FOR INPUT SPACE` when a machine is protecting staged material from an overfilled input inventory.
+- Forced recovery and deliberate block-break overflow still use Paper's owning-region scheduler, so any unavoidable item entity creation remains off the asynchronous Slimefun ticker.
+- Electric Magical and every other GenericMachine-based Supreme machine receive the same protection.
+- Preserved existing item IDs, recipes, output quantities, processing speeds and energy costs.
+
+## Supreme Legacy 1.0.5
+
+### Networks Rollback Safety
+
+- Moved GenericMachine overflow item spawning onto Paper's owning-region scheduler so an asynchronous Slimefun ticker cannot trigger `AsyncCatcher` while returning reserved inputs.
+- Added a zero-capacity transport sentinel for late same-item deliveries after an ingredient is already fully reserved.
+- Reduced Networks/Cargo refill races that could otherwise fill Electric Magical and other staged-machine input inventories during processing.
+- Preserved recipes, output rates, processing speeds, energy costs and item IDs.
+
 ## Supreme Legacy 1.0.4
 
 ### Specialized Machine Safety
