@@ -11,8 +11,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.4"
-  OUTPUT_NAME: "SF_Supreme1.0.4.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.5"
+  OUTPUT_NAME: "SF_Supreme1.0.5.jar"
 
 jobs:
   build-legacy:
@@ -72,7 +72,7 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${LEGACY_ARTIFACT_VERSION}"; fi
           JAR="dist/${OUTPUT_NAME}"
-          NOTES="Supreme Legacy 1.0.4 Specialized Machine Safety. Tech Robotic and Tech Mutation now preserve consumed inputs, progress and mutation result state across restarts. Mob Collector, Virtual Garden and Virtual Aquarium preserve active cycles, and Virtual Aquarium defers tool durability until output commit. Machine Doctor now reads authoritative specialized-machine state. Supreme armor protections require a complete matching set. Adds CI safety invariants while preserving recipes, output rates, speeds, energy costs and item IDs."
+          NOTES="Supreme Legacy 1.0.5 Networks rollback safety. Supreme now schedules overflow item drops on the owning Paper region instead of spawning entities from Slimefun's asynchronous machine ticker. Recipe-aware transport also returns a zero-capacity sentinel for late same-item deliveries after an ingredient is fully reserved, reducing Networks refill races and preventing Electric Magical and other staged machines from being circuit-broken during rollback. Recipes, output rates, speeds, energy costs and item IDs are unchanged."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
