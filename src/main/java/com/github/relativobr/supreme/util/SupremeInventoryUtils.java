@@ -6,7 +6,7 @@ import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
-/** Shared output-capacity checks that avoid partial insertion and item loss. */
+/** Shared inventory helpers for safe machine output and lightweight idle-state checks. */
 public final class SupremeInventoryUtils {
 
   private SupremeInventoryUtils() {}
@@ -59,6 +59,24 @@ public final class SupremeInventoryUtils {
       }
     }
     return true;
+  }
+
+  /**
+   * Returns a cheap runtime fingerprint for the requested menu slots. This is only used to wake
+   * idle-machine recipe checks when their relevant inventory changes; it is never persisted or
+   * used as an item identity key, so a hash collision can at worst defer a retry by a few ticks.
+   */
+  @ParametersAreNonnullByDefault
+  public static int fingerprint(BlockMenu menu, int[]... slotGroups) {
+    int hash = 1;
+    for (int[] slots : slotGroups) {
+      for (int slot : slots) {
+        ItemStack item = menu.getItemInSlot(slot);
+        hash = 31 * hash + slot;
+        hash = 31 * hash + (item == null || item.getType().isAir() ? 0 : item.hashCode());
+      }
+    }
+    return hash;
   }
 
   @ParametersAreNonnullByDefault
