@@ -62,12 +62,12 @@ public class SetupTechMachines {
 
       new TechRobotic(TechRobotic.TECH_ROBOTIC_II,
           TechRobotic.RECIPE_TECH_ROBOTIC_II).setAmountUpgrade(32).setTimeProcess(60)
-          .setMachineIdentifier(TechRobotic.TECH_ROBOTIC.getItemId()).setCapacity(500)
+          .setMachineIdentifier(TechRobotic.TECH_ROBOTIC_II.getItemId()).setCapacity(500)
           .setEnergyConsumption(500).register(sup);
 
       new TechRobotic(TechRobotic.TECH_ROBOTIC_III,
           TechRobotic.RECIPE_TECH_ROBOTIC_III).setAmountUpgrade(16).setTimeProcess(60)
-          .setMachineIdentifier(TechRobotic.TECH_ROBOTIC.getItemId()).setCapacity(500)
+          .setMachineIdentifier(TechRobotic.TECH_ROBOTIC_III.getItemId()).setCapacity(500)
           .setEnergyConsumption(500).register(sup);
 
       new SafeTechGenerator(TechGenerator.TECH_GENERATOR,
