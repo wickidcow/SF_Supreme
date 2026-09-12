@@ -79,6 +79,7 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
   private final Map<Block, Integer> progress = new HashMap<>();
   private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
   private final Map<Block, Long> nextIdleCheck = new HashMap<>();
+  private final Map<Block, Integer> lastIdleFingerprint = new HashMap<>();
   private final Set<VirtualGardenMachineRecipe> virtualGardenMachineRecipes = new HashSet<>();
 
   @ParametersAreNonnullByDefault
@@ -147,18 +148,21 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
     MachineRecipe active = processing.get(b);
     if (active == null) {
       long gameTime = b.getWorld().getGameTime();
-      if (gameTime < nextIdleCheck.getOrDefault(b, 0L)) {
+      int fingerprint = SupremeInventoryUtils.fingerprint(inv, getInputSlots(), getOutputSlots());
+      if (gameTime < nextIdleCheck.getOrDefault(b, 0L)
+          && fingerprint == lastIdleFingerprint.getOrDefault(b, Integer.MIN_VALUE)) {
         return;
       }
 
       MachineRecipe next = findNextRecipe(inv);
       if (next != null) {
-        nextIdleCheck.remove(b);
+        clearIdleBackoff(b);
         processing.put(b, next);
         progress.put(b, next.getTicks());
         lastProgressCheckpoint.put(b, next.getTicks());
         persistState(b, next, next.getTicks());
       } else {
+        lastIdleFingerprint.put(b, fingerprint);
         nextIdleCheck.put(b, gameTime + IDLE_RETRY_TICKS);
         updateStatusReset(inv);
       }
@@ -222,7 +226,7 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
         processing.put(block, recipe);
         progress.put(block, Math.max(0, state.progress()));
         lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
-        nextIdleCheck.remove(block);
+        clearIdleBackoff(block);
         return true;
       }
     }
@@ -231,11 +235,16 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
     return false;
   }
 
+  private void clearIdleBackoff(Block block) {
+    nextIdleCheck.remove(block);
+    lastIdleFingerprint.remove(block);
+  }
+
   private void clearState(Block block) {
     processing.remove(block);
     progress.remove(block);
     lastProgressCheckpoint.remove(block);
-    nextIdleCheck.remove(block);
+    clearIdleBackoff(block);
     SupremeSpecialMachineStateCodec.clear(block);
   }
 
@@ -260,7 +269,7 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
     MachineRecipe active = processing.get(block);
     if (active == null) {
       lines.add("State: IDLE / waiting for cultivation input");
-      lines.add("Idle recipe retry: " + IDLE_RETRY_TICKS + " ticks");
+      lines.add("Idle recipe retry: " + IDLE_RETRY_TICKS + " ticks while inventory is unchanged");
       return lines;
     }
 
