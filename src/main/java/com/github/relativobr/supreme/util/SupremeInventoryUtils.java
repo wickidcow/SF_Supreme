@@ -1,8 +1,11 @@
 package com.github.relativobr.supreme.util;
 
+import com.github.relativobr.supreme.Supreme;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
@@ -79,6 +82,12 @@ public final class SupremeInventoryUtils {
     return hash;
   }
 
+  /**
+   * Pushes complete machine outputs into their destination slots. Normal callers preflight output
+   * capacity before reaching this method, so a leftover can only occur if another inventory write
+   * races that preflight. Preserve that leftover instead of voiding it, but create the item entity
+   * on the owning Paper region so asynchronous Slimefun machine tickers cannot trip AsyncCatcher.
+   */
   @ParametersAreNonnullByDefault
   public static void pushAll(BlockMenu menu, int[] slots, ItemStack... outputs) {
     for (ItemStack output : outputs) {
@@ -86,9 +95,21 @@ public final class SupremeInventoryUtils {
         continue;
       }
       ItemStack leftover = menu.pushItem(output.clone(), slots);
-      if (leftover != null && menu.getLocation().getWorld() != null) {
-        menu.getLocation().getWorld().dropItemNaturally(menu.getLocation(), leftover);
+      if (leftover != null && !leftover.getType().isAir() && leftover.getAmount() > 0) {
+        dropItemNaturallySafe(menu.getLocation(), leftover);
       }
     }
+  }
+
+  @ParametersAreNonnullByDefault
+  private static void dropItemNaturallySafe(Location location, ItemStack item) {
+    if (location.getWorld() == null || item.getType().isAir() || item.getAmount() <= 0) {
+      return;
+    }
+
+    Location dropLocation = location.clone();
+    ItemStack dropped = item.clone();
+    Bukkit.getRegionScheduler().execute(Supreme.inst(), dropLocation,
+        () -> dropLocation.getWorld().dropItemNaturally(dropLocation, dropped));
   }
 }

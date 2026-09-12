@@ -11,8 +11,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.9"
-  OUTPUT_NAME: "SF_Supreme1.0.9.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.10"
+  OUTPUT_NAME: "SF_Supreme1.0.10.jar"
 
 jobs:
   build-legacy:
@@ -80,7 +80,7 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${LEGACY_ARTIFACT_VERSION}"; fi
           JAR="dist/${OUTPUT_NAME}"
-          NOTES="Supreme Legacy 1.0.9 improves idle efficiency and forward compatibility without changing Supreme gameplay. Virtual Garden, Virtual Aquarium, Tech Mutation, and Tech Robotic now back off repeated recipe scans only while their relevant inventories are unchanged; any input/output change wakes the machine immediately, while active cycles, output-full recovery, mutation rolls, selected aquarium outputs, tool durability, processing speeds, energy costs, recipes, item IDs, and persisted state remain unchanged. CI compiles Supreme against Paper 26.2, Paper 26.3, and a rolling latest Paper API line on Java 25 in addition to Slimefun Legacy, Gugu, and United so upcoming Minecraft/Paper API changes are detected early."
+          NOTES="Supreme Legacy 1.0.10 hardens machine output recovery for concurrent Networks/Cargo inventory changes without changing normal Supreme gameplay. If an output slot changes after capacity preflight and BlockMenu returns an unexpected leftover, Supreme now creates the fallback item entity through Paper's owning-region scheduler instead of directly from an asynchronous Slimefun ticker. Normal output insertion, recipes, quantities, processing speeds, energy costs, item IDs, persistence, rollback behavior, and automation routing are unchanged. CI continues to compile against Paper 26.2, Paper 26.3, rolling-latest Paper, Slimefun Legacy, Gugu, and United."
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; leaving its tag and asset unchanged."
             exit 0

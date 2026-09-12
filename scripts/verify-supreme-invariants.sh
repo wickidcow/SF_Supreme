@@ -92,10 +92,20 @@ if [[ "$(grep -c 'getNearbyEntities(' "$MOBTECH_COLLECTOR")" -ne 1 ]]; then
   exit 1
 fi
 
-# Specialized synchronized machines must avoid repeated idle recipe scans while still waking
-# immediately when relevant inventory contents change.
+# Shared output insertion may run from asynchronous GenericMachine tickers. A concurrent transport
+# write can invalidate the normal output-capacity preflight, so any unexpected leftover must hop to
+# the owning Paper region before creating an item entity.
 INVENTORY_UTIL="$JAVA/util/SupremeInventoryUtils.java"
 grep -q 'static int fingerprint' "$INVENTORY_UTIL"
+grep -q 'dropItemNaturallySafe(menu.getLocation(), leftover)' "$INVENTORY_UTIL"
+grep -q 'Bukkit.getRegionScheduler().execute' "$INVENTORY_UTIL"
+if awk '/public static void pushAll/,/^  }/' "$INVENTORY_UTIL" | grep -q '\.dropItemNaturally('; then
+  echo "SupremeInventoryUtils.pushAll must not create item entities directly from a machine ticker." >&2
+  exit 1
+fi
+
+# Specialized synchronized machines must avoid repeated idle recipe scans while still waking
+# immediately when relevant inventory contents change.
 for machine in \
   "$JAVA/machine/VirtualGarden.java" \
   "$JAVA/machine/VirtualAquarium.java" \
@@ -141,4 +151,4 @@ grep -q 'setMachineIdentifier(TechRobotic.TECH_ROBOTIC_III.getItemId())' "$SETUP
 
 grep -q 'SupremeMachineDiagnostics diagnostics' "$JAVA/command/SupremeCommand.java"
 
-echo "Supreme forward-compatibility, machine, transport, mob scan, inventory-aware idle backoff, rollback, persistence, armor, and energy invariants verified."
+echo "Supreme forward-compatibility, machine, transport, mob scan, async output safety, inventory-aware idle backoff, rollback, persistence, armor, and energy invariants verified."
