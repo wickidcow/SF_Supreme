@@ -87,6 +87,7 @@ public class TechRobotic extends SimpleItemContainerMachine
   private final Map<Block, ItemStack> consumedInputs = new HashMap<>();
   private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
   private final Map<Block, Long> nextIdleCheck = new HashMap<>();
+  private final Map<Block, Integer> lastIdleFingerprint = new HashMap<>();
   private int speed = 1;
   private int amountUpgrade = 64;
 
@@ -172,18 +173,21 @@ public class TechRobotic extends SimpleItemContainerMachine
     ItemStack itemProcess = processing.get(b);
     if (itemProcess == null) {
       long gameTime = b.getWorld().getGameTime();
-      if (gameTime < nextIdleCheck.getOrDefault(b, 0L)) {
+      int fingerprint = SupremeInventoryUtils.fingerprint(inv, getInputSlots());
+      if (gameTime < nextIdleCheck.getOrDefault(b, 0L)
+          && fingerprint == lastIdleFingerprint.getOrDefault(b, Integer.MIN_VALUE)) {
         return;
       }
 
       AbstractItemRecipe recipe = findRecipe(inv);
       if (recipe == null) {
+        lastIdleFingerprint.put(b, fingerprint);
         nextIdleCheck.put(b, gameTime + IDLE_RETRY_TICKS);
         invalidProgressBar(inv, "&cTechRobotic unidentified recipe");
         return;
       }
 
-      nextIdleCheck.remove(b);
+      clearIdleBackoff(b);
       ItemStack output = recipe.getFirstItemOutput().clone();
       if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), output)) {
         invalidProgressBar(inv, "&cOutput is full");
@@ -290,7 +294,7 @@ public class TechRobotic extends SimpleItemContainerMachine
         consumedInputs.put(block, state.reservedItems()[0].clone());
         progressTime.put(block, Math.max(0, state.progress()));
         lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
-        nextIdleCheck.remove(block);
+        clearIdleBackoff(block);
         return true;
       }
     }
@@ -312,12 +316,17 @@ public class TechRobotic extends SimpleItemContainerMachine
     }
   }
 
+  private void clearIdleBackoff(Block block) {
+    nextIdleCheck.remove(block);
+    lastIdleFingerprint.remove(block);
+  }
+
   private void clearState(Block block) {
     processing.remove(block);
     progressTime.remove(block);
     consumedInputs.remove(block);
     lastProgressCheckpoint.remove(block);
-    nextIdleCheck.remove(block);
+    clearIdleBackoff(block);
     SupremeSpecialMachineStateCodec.clear(block);
   }
 
@@ -348,7 +357,8 @@ public class TechRobotic extends SimpleItemContainerMachine
     if (output == null) {
       lines.add("State: IDLE / waiting for upgrade input");
       lines.add("Required input amount: " + getAmountUpgrade());
-      lines.add("Idle recipe retry: every " + IDLE_RETRY_TICKS + " ticks while no recipe matches");
+      lines.add("Idle recipe retry: every " + IDLE_RETRY_TICKS
+          + " ticks while the upgrade input is unchanged");
       return lines;
     }
 
