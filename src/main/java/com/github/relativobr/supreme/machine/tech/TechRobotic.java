@@ -49,6 +49,7 @@ public class TechRobotic extends SimpleItemContainerMachine
 
   private static final String STATE_TYPE = "TECH_ROBOTIC";
   private static final int PROGRESS_CHECKPOINT_INTERVAL = 20;
+  private static final long IDLE_RETRY_TICKS = 4L;
 
   public static final SlimefunItemStack TECH_ROBOTIC = new SupremeItemStack("SUPREME_TECH_ROBOTIC",
       Material.POLISHED_BLACKSTONE, "&bTech Robotic", "", "&fUse beginner level robots ",
@@ -85,6 +86,7 @@ public class TechRobotic extends SimpleItemContainerMachine
   private final Map<Block, Integer> progressTime = new HashMap<>();
   private final Map<Block, ItemStack> consumedInputs = new HashMap<>();
   private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
+  private final Map<Block, Long> nextIdleCheck = new HashMap<>();
   private int speed = 1;
   private int amountUpgrade = 64;
 
@@ -169,12 +171,19 @@ public class TechRobotic extends SimpleItemContainerMachine
     restoreStateIfNeeded(b);
     ItemStack itemProcess = processing.get(b);
     if (itemProcess == null) {
+      long gameTime = b.getWorld().getGameTime();
+      if (gameTime < nextIdleCheck.getOrDefault(b, 0L)) {
+        return;
+      }
+
       AbstractItemRecipe recipe = findRecipe(inv);
       if (recipe == null) {
+        nextIdleCheck.put(b, gameTime + IDLE_RETRY_TICKS);
         invalidProgressBar(inv, "&cTechRobotic unidentified recipe");
         return;
       }
 
+      nextIdleCheck.remove(b);
       ItemStack output = recipe.getFirstItemOutput().clone();
       if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), output)) {
         invalidProgressBar(inv, "&cOutput is full");
@@ -281,6 +290,7 @@ public class TechRobotic extends SimpleItemContainerMachine
         consumedInputs.put(block, state.reservedItems()[0].clone());
         progressTime.put(block, Math.max(0, state.progress()));
         lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
+        nextIdleCheck.remove(block);
         return true;
       }
     }
@@ -307,6 +317,7 @@ public class TechRobotic extends SimpleItemContainerMachine
     progressTime.remove(block);
     consumedInputs.remove(block);
     lastProgressCheckpoint.remove(block);
+    nextIdleCheck.remove(block);
     SupremeSpecialMachineStateCodec.clear(block);
   }
 
@@ -337,6 +348,7 @@ public class TechRobotic extends SimpleItemContainerMachine
     if (output == null) {
       lines.add("State: IDLE / waiting for upgrade input");
       lines.add("Required input amount: " + getAmountUpgrade());
+      lines.add("Idle recipe retry: every " + IDLE_RETRY_TICKS + " ticks while no recipe matches");
       return lines;
     }
 
