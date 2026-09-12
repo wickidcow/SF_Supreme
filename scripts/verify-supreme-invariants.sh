@@ -80,6 +80,18 @@ if [[ "$(grep -c 'getNearbyEntities(' "$MOBTECH_COLLECTOR")" -ne 1 ]]; then
   exit 1
 fi
 
+# Specialized synchronized machines must avoid repeating expensive idle recipe scans every tick.
+for machine in \
+  "$JAVA/machine/VirtualGarden.java" \
+  "$JAVA/machine/VirtualAquarium.java" \
+  "$JAVA/machine/tech/TechMutation.java" \
+  "$JAVA/machine/tech/TechRobotic.java"; do
+  grep -q 'IDLE_RETRY_TICKS = 4L' "$machine"
+  grep -q 'nextIdleCheck' "$machine"
+  grep -q 'getGameTime()' "$machine"
+  grep -q 'nextIdleCheck.remove(block)\|nextIdleCheck.remove(b)' "$machine"
+done
+
 grep -q 'loadReservedOnly' "$JAVA/machine/tech/TechRobotic.java"
 grep -q 'loadReservedOnly' "$JAVA/machine/tech/TechMutation.java"
 grep -q 'saveAuxText' "$JAVA/machine/tech/TechMutation.java"
@@ -112,4 +124,4 @@ grep -q 'setMachineIdentifier(TechRobotic.TECH_ROBOTIC_III.getItemId())' "$SETUP
 
 grep -q 'SupremeMachineDiagnostics diagnostics' "$JAVA/command/SupremeCommand.java"
 
-echo "Supreme machine, transport, mob scan, rollback, persistence, armor, and energy invariants verified."
+echo "Supreme machine, transport, mob scan, idle backoff, rollback, persistence, armor, and energy invariants verified."
