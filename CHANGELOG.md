@@ -1,5 +1,18 @@
 # Changelog
 
+## Supreme Legacy 1.0.11
+
+### Async Machine State Safety
+
+- Hardened `GenericMachine` live per-block runtime state for Slimefun's asynchronous `AContainer` ticker.
+- Processing recipes, progress, staged-input state, retry counters, backoff timers, persistence checkpoints, and active recipe requirements now use concurrency-safe outer maps where ticker, transport, diagnostics, and block-break/recovery paths can observe the same placed machine.
+- Mutable reserved-input maps are now concurrency-safe when created for new processing cycles and when restored from persistent state.
+- Kept recipe caches, recipe ordering, and read-only grouped recipe requirements on their existing registration/local data structures so recipe-selection behavior is unchanged.
+- Machine processing remains asynchronous. This update does not move normal machine work onto the main thread and does not add coarse inventory locks.
+- Added CI invariants requiring the concurrency-safe GenericMachine runtime state so future refactors cannot silently restore unsafe shared `HashMap` storage.
+- Preserved recipes, item IDs, output quantities, processing speeds, energy costs, persistence format, rollback rules, staged Networks/Cargo behavior, and progression.
+- Compatibility coverage remains Slimefun Legacy, Gugu, United, Paper 26.2, Paper 26.3, and rolling-latest Paper.
+
 ## Supreme Legacy 1.0.10
 
 ### Async Output Recovery Safety

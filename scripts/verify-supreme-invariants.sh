@@ -41,6 +41,22 @@ grep -q 'canReturnConsumedMap' "$GENERIC"
 grep -q 'Normal recipe rollback never drops items' "$GENERIC"
 grep -q 'return new int\[]{getStatusSlot()};' "$GENERIC"
 
+# GenericMachine inherits AContainer's asynchronous ticker on Paper/Purpur. Its live per-block
+# state is also observed by transport and block-break/recovery paths, so the shared outer maps and
+# mutable reserved-input maps must remain safe for concurrent structural access. Recipe caches are
+# registration-time data and intentionally remain ordinary collections.
+grep -q 'import java.util.concurrent.ConcurrentHashMap;' "$GENERIC"
+grep -q 'Map<Block, MachineRecipe> processing = new ConcurrentHashMap<>()' "$GENERIC"
+grep -q 'Map<Block, Integer> progressTime = new ConcurrentHashMap<>()' "$GENERIC"
+grep -q 'Map<Block, Map<ItemStack, Integer>> consumedItemsMap = new ConcurrentHashMap<>()' "$GENERIC"
+grep -q 'Map<Block, Integer> attemptCount = new ConcurrentHashMap<>()' "$GENERIC"
+grep -q 'Map<Block, Long> heavyCheckAfter = new ConcurrentHashMap<>()' "$GENERIC"
+grep -q 'Map<Block, Integer> lastProgressCheckpoint = new ConcurrentHashMap<>()' "$GENERIC"
+grep -q 'Map<Block, Map<ItemStack, Integer>> activeRequiredItems = new ConcurrentHashMap<>()' "$GENERIC"
+grep -q 'consumedItemsMap.computeIfAbsent(b, ignored -> new ConcurrentHashMap<>())' "$GENERIC"
+grep -q 'consumedItemsMap.put(b, new ConcurrentHashMap<>())' "$GENERIC"
+grep -q 'consumedItemsMap.put(b, new ConcurrentHashMap<>(state.consumedItems()))' "$GENERIC"
+
 # Networks/Cargo routing must reuse precomputed recipe requirements instead of regrouping every query.
 grep -q 'transportRecipeIndex' "$GENERIC"
 grep -q 'rebuildRecipeCaches' "$GENERIC"
@@ -151,4 +167,4 @@ grep -q 'setMachineIdentifier(TechRobotic.TECH_ROBOTIC_III.getItemId())' "$SETUP
 
 grep -q 'SupremeMachineDiagnostics diagnostics' "$JAVA/command/SupremeCommand.java"
 
-echo "Supreme forward-compatibility, machine, transport, mob scan, async output safety, inventory-aware idle backoff, rollback, persistence, armor, and energy invariants verified."
+echo "Supreme forward-compatibility, machine concurrency, transport, mob scan, async output safety, inventory-aware idle backoff, rollback, persistence, armor, and energy invariants verified."
