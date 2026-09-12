@@ -11,8 +11,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.8"
-  OUTPUT_NAME: "SF_Supreme1.0.8.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.9"
+  OUTPUT_NAME: "SF_Supreme1.0.9.jar"
 
 jobs:
   build-legacy:
@@ -72,12 +72,44 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${LEGACY_ARTIFACT_VERSION}"; fi
           JAR="dist/${OUTPUT_NAME}"
-          NOTES="Supreme Legacy 1.0.8 reduces synchronized mob-scanning cost. Mob Collector now performs at most one nearby LivingEntity query per recipe-selection pass and reuses that fresh snapshot across its candidate recipes, instead of repeating a world proximity query for each matching tool recipe. Idle Mob Collectors that find no usable recipe/mob retry every 4 ticks while active processing remains unchanged. MobTech Collector now uses the same single-snapshot approach for Bee, Iron Golem, and Zombie selection while still storing and revalidating the exact matched entity before processing starts. Existing recipes, drops, output quantities, scan ranges, bottle/tool costs, staged inputs, persistence, processing speeds, and energy behavior are unchanged."
+          NOTES="Supreme Legacy 1.0.9 improves idle efficiency and forward compatibility without changing Supreme gameplay. Virtual Garden, Virtual Aquarium, Tech Mutation, and Tech Robotic now back off repeated recipe scans only while their relevant inventories are unchanged; any input/output change wakes the machine immediately, while active cycles, output-full recovery, mutation rolls, selected aquarium outputs, tool durability, processing speeds, energy costs, recipes, item IDs, and persisted state remain unchanged. CI now compiles Supreme against Paper 26.2 and the 26.3 API line on Java 25 in addition to Slimefun Legacy, Gugu, and United so upcoming Minecraft/Paper API changes are detected before release."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
             gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_Supreme $TAG" --notes "$NOTES"
           fi
+
+  compatibility-paper:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        paper-version:
+          - "[26.2.build,26.3.build)"
+          - "[26.3.build,26.4.build)"
+    steps:
+      - name: Checkout Supreme Legacy
+        uses: actions/checkout@v5
+      - name: Checkout Slimefun Legacy API
+        uses: actions/checkout@v5
+        with:
+          repository: wickidcow/Slimefun-Legacy
+          path: slimefun-legacy
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Publish Slimefun Legacy API locally
+        working-directory: slimefun-legacy
+        run: |
+          chmod +x gradlew
+          ./gradlew publishToMavenLocal -x test -PprojectVersion=Legacy-SNAPSHOT
+      - name: Compile Supreme against Paper API line
+        env:
+          PAPER_VERSION: ${{ matrix.paper-version }}
+        run: mvn -B -Plegacy -Dpaper.version="$PAPER_VERSION" -DskipTests clean package
 
   compatibility-gugu:
     runs-on: ubuntu-latest

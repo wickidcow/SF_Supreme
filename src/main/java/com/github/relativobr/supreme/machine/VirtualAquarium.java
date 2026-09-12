@@ -46,6 +46,7 @@ public class VirtualAquarium extends SimpleItemWithLargeContainerMachine
 
   private static final String STATE_TYPE = "VIRTUAL_AQUARIUM";
   private static final int PROGRESS_CHECKPOINT_INTERVAL = 20;
+  private static final long IDLE_RETRY_TICKS = 4L;
 
   public static final SlimefunItemStack VIRTUAL_AQUARIUM_MACHINE = new SupremeItemStack("SUPREME_VIRTUAL_AQUARIUM_I",
       Material.DARK_PRISMARINE, "&bVirtual Aquarium", "", "&fThis machine allows you to collect ",
@@ -81,6 +82,8 @@ public class VirtualAquarium extends SimpleItemWithLargeContainerMachine
   private final Map<Block, ItemStack> selectedOutput = new HashMap<>();
   private final Map<Block, Integer> selectedInputSlots = new HashMap<>();
   private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
+  private final Map<Block, Long> nextIdleCheck = new HashMap<>();
+  private final Map<Block, Integer> lastIdleFingerprint = new HashMap<>();
   private final Set<VirtualAquariumMachineRecipe> virtualAquariumMachineRecipe = new HashSet<>();
 
   @ParametersAreNonnullByDefault
@@ -179,8 +182,16 @@ public class VirtualAquarium extends SimpleItemWithLargeContainerMachine
     restoreStateIfNeeded(b);
     MachineRecipe active = processing.get(b);
     if (active == null) {
+      long gameTime = b.getWorld().getGameTime();
+      int fingerprint = SupremeInventoryUtils.fingerprint(inv, getInputSlots(), getOutputSlots());
+      if (gameTime < nextIdleCheck.getOrDefault(b, 0L)
+          && fingerprint == lastIdleFingerprint.getOrDefault(b, Integer.MIN_VALUE)) {
+        return;
+      }
+
       MachineRecipe next = findNextRecipe(inv);
       if (next != null) {
+        clearIdleBackoff(b);
         ItemStack chosen = selectedOutput.get(b);
         Integer slot = selectedInputSlots.get(b);
         if (chosen == null || slot == null) {
@@ -193,6 +204,8 @@ public class VirtualAquarium extends SimpleItemWithLargeContainerMachine
         lastProgressCheckpoint.put(b, next.getTicks());
         persistState(b, next, chosen, slot, next.getTicks());
       } else {
+        lastIdleFingerprint.put(b, fingerprint);
+        nextIdleCheck.put(b, gameTime + IDLE_RETRY_TICKS);
         clearTransientState(b);
         updateStatusReset(inv);
       }
@@ -297,6 +310,7 @@ public class VirtualAquarium extends SimpleItemWithLargeContainerMachine
         selectedOutput.put(block, state.outputs()[0].clone());
         selectedInputSlots.put(block, state.auxInt());
         lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
+        clearIdleBackoff(block);
         return true;
       }
     }
@@ -310,12 +324,18 @@ public class VirtualAquarium extends SimpleItemWithLargeContainerMachine
     selectedInputSlots.remove(block);
   }
 
+  private void clearIdleBackoff(Block block) {
+    nextIdleCheck.remove(block);
+    lastIdleFingerprint.remove(block);
+  }
+
   private void clearState(Block block) {
     processing.remove(block);
     progress.remove(block);
     selectedOutput.remove(block);
     selectedInputSlots.remove(block);
     lastProgressCheckpoint.remove(block);
+    clearIdleBackoff(block);
     SupremeSpecialMachineStateCodec.clear(block);
   }
 
@@ -341,6 +361,7 @@ public class VirtualAquarium extends SimpleItemWithLargeContainerMachine
     ItemStack output = selectedOutput.get(block);
     if (active == null || output == null) {
       lines.add("State: IDLE / waiting for fishing tool");
+      lines.add("Idle recipe retry: " + IDLE_RETRY_TICKS + " ticks while inventory is unchanged");
       return lines;
     }
 
