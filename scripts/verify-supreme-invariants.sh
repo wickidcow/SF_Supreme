@@ -4,6 +4,18 @@ set -euo pipefail
 ROOT="${1:-.}"
 JAVA="$ROOT/src/main/java/com/github/relativobr/supreme"
 
+# Keep Supreme on stable Bukkit/Paper + Slimefun APIs. Direct NMS/CraftBukkit coupling and
+# runtime Minecraft-version branching are intentionally forbidden because they are common sources
+# of breakage on Mojang/Paper version changes. Prefer capability checks and compile-matrix coverage.
+if grep -R -E 'net\.minecraft|org\.bukkit\.craftbukkit' -n "$JAVA"; then
+  echo "Supreme must not depend directly on NMS or CraftBukkit implementation packages." >&2
+  exit 1
+fi
+if grep -R -E 'Bukkit\.(getVersion|getBukkitVersion|getMinecraftVersion)\(' -n "$JAVA"; then
+  echo "Supreme must not branch on parsed Minecraft/Bukkit version strings; use stable API capability checks." >&2
+  exit 1
+fi
+
 if grep -R "energyPowerPerTick" -n "$JAVA"; then
   echo "Player-facing energy rates must use the J/s conversion helpers." >&2
   exit 1
@@ -129,4 +141,4 @@ grep -q 'setMachineIdentifier(TechRobotic.TECH_ROBOTIC_III.getItemId())' "$SETUP
 
 grep -q 'SupremeMachineDiagnostics diagnostics' "$JAVA/command/SupremeCommand.java"
 
-echo "Supreme machine, transport, mob scan, inventory-aware idle backoff, rollback, persistence, armor, and energy invariants verified."
+echo "Supreme forward-compatibility, machine, transport, mob scan, inventory-aware idle backoff, rollback, persistence, armor, and energy invariants verified."

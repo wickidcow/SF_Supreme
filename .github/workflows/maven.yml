@@ -38,6 +38,14 @@ jobs:
           java-version: '25'
           cache: maven
 
+      - name: Verify release metadata alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT_VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)"
+          test "$PROJECT_VERSION" = "$LEGACY_ARTIFACT_VERSION"
+          test "$OUTPUT_NAME" = "SF_Supreme${PROJECT_VERSION}.jar"
+
       - name: Publish Slimefun Legacy API locally
         working-directory: slimefun-legacy
         run: |
@@ -63,7 +71,7 @@ jobs:
           archive: false
           if-no-files-found: error
 
-      - name: Publish raw JAR release asset
+      - name: Publish immutable raw JAR release asset
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || github.ref_name == github.event.repository.default_branch
         env:
           GH_TOKEN: ${{ github.token }}
@@ -72,21 +80,26 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${LEGACY_ARTIFACT_VERSION}"; fi
           JAR="dist/${OUTPUT_NAME}"
-          NOTES="Supreme Legacy 1.0.9 improves idle efficiency and forward compatibility without changing Supreme gameplay. Virtual Garden, Virtual Aquarium, Tech Mutation, and Tech Robotic now back off repeated recipe scans only while their relevant inventories are unchanged; any input/output change wakes the machine immediately, while active cycles, output-full recovery, mutation rolls, selected aquarium outputs, tool durability, processing speeds, energy costs, recipes, item IDs, and persisted state remain unchanged. CI now compiles Supreme against Paper 26.2 and the 26.3 API line on Java 25 in addition to Slimefun Legacy, Gugu, and United so upcoming Minecraft/Paper API changes are detected before release."
+          NOTES="Supreme Legacy 1.0.9 improves idle efficiency and forward compatibility without changing Supreme gameplay. Virtual Garden, Virtual Aquarium, Tech Mutation, and Tech Robotic now back off repeated recipe scans only while their relevant inventories are unchanged; any input/output change wakes the machine immediately, while active cycles, output-full recovery, mutation rolls, selected aquarium outputs, tool durability, processing speeds, energy costs, recipes, item IDs, and persisted state remain unchanged. CI compiles Supreme against Paper 26.2, Paper 26.3, and a rolling latest Paper API line on Java 25 in addition to Slimefun Legacy, Gugu, and United so upcoming Minecraft/Paper API changes are detected early."
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$JAR" --clobber
-          else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_Supreme $TAG" --notes "$NOTES"
+            echo "Release $TAG already exists; leaving its tag and asset unchanged."
+            exit 0
           fi
+          gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_Supreme $TAG" --notes "$NOTES"
 
   compatibility-paper:
+    name: compatibility-paper (${{ matrix.api-line }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        paper-version:
-          - "[26.2.build,26.3.build)"
-          - "[26.3.build,26.4.build)"
+        include:
+          - api-line: "26.2"
+            paper-version: "[26.2.build,26.3.build)"
+          - api-line: "26.3"
+            paper-version: "[26.3.build,26.4.build)"
+          - api-line: "rolling-latest"
+            paper-version: "[26.3.build,)"
     steps:
       - name: Checkout Supreme Legacy
         uses: actions/checkout@v5
