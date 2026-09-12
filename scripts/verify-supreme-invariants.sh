@@ -29,6 +29,17 @@ grep -q 'canReturnConsumedMap' "$GENERIC"
 grep -q 'Normal recipe rollback never drops items' "$GENERIC"
 grep -q 'return new int\[]{getStatusSlot()};' "$GENERIC"
 
+# Networks/Cargo routing must reuse precomputed recipe requirements instead of regrouping every query.
+grep -q 'transportRecipeIndex' "$GENERIC"
+grep -q 'rebuildRecipeCaches' "$GENERIC"
+grep -q 'activeRequiredItems' "$GENERIC"
+grep -q 'transportRecipeIndex.get(incoming.getType())' "$GENERIC"
+grep -q 'if (stagedThisTick == 0)' "$GENERIC"
+if grep -q 'java.util.Comparator\|java.util.LinkedList' "$GENERIC"; then
+  echo "GenericMachine transport routing must not allocate/sort a temporary partial-slot list." >&2
+  exit 1
+fi
+
 # Ordinary staged rollback must retain overflow for a later retry instead of spawning entities.
 if awk '/private boolean revertConsumedItem/,/^  }/' "$GENERIC" | grep -q 'dropItemNaturallySafe'; then
   echo "Normal GenericMachine rollback must not drop item entities." >&2
@@ -77,6 +88,10 @@ grep -q 'supreme_armor_thornium_epic' "$ARMOR"
 grep -q 'supreme_armor_thornium_legendary' "$ARMOR"
 grep -q 'supreme_armor_thornium_supreme' "$ARMOR"
 
+SETUP_TECH="$JAVA/setup/SetupTechMachines.java"
+grep -q 'setMachineIdentifier(TechRobotic.TECH_ROBOTIC_II.getItemId())' "$SETUP_TECH"
+grep -q 'setMachineIdentifier(TechRobotic.TECH_ROBOTIC_III.getItemId())' "$SETUP_TECH"
+
 grep -q 'SupremeMachineDiagnostics diagnostics' "$JAVA/command/SupremeCommand.java"
 
-echo "Supreme machine, rollback, persistence, armor, and energy invariants verified."
+echo "Supreme machine, transport, rollback, persistence, armor, and energy invariants verified."
