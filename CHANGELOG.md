@@ -1,5 +1,23 @@
 # Changelog
 
+## Supreme Legacy 1.0.9
+
+### Specialized Machine Idle Efficiency
+
+- Virtual Garden, Virtual Aquarium, Tech Mutation, and Tech Robotic no longer repeat unchanged idle recipe scans every synchronized tick.
+- Idle retry checks use a lightweight per-block inventory fingerprint and a 4-tick backoff only while the relevant inventory state is unchanged.
+- Input or output changes wake Virtual Garden and Virtual Aquarium immediately, preserving responsiveness when automation inserts an input or output space becomes available.
+- Mutation and Robotic input changes wake their recipe checks immediately; once a valid recipe matches, output-full checks continue every tick exactly as before.
+- Active processing remains full-speed. Mutation result rolls, persisted success/failure, Virtual Aquarium selected outputs, tool durability, reserved upgrade inputs, processing time, and energy use are unchanged.
+- Idle timing/fingerprint data is runtime-only and is cleared when processing starts, persisted state is restored, the machine finishes, or the block is broken.
+
+### New Minecraft / Paper Compatibility
+
+- Added Java 25 CI compile checks against both the Paper 26.2 API line and the Paper 26.3 API line, in addition to Slimefun Legacy, Gugu, and United builds.
+- The compatibility matrix is detection-only: the shipped plugin keeps its existing gameplay behavior, item IDs, block data, recipes, and conservative plugin API declaration instead of unnecessarily raising the minimum server version.
+- Expanded safety invariants to require inventory-aware idle wakeups so future performance refactors cannot silently add input-response delays.
+- Preserved existing recipes, outputs, drop tables, item IDs, machine speeds, energy costs, progression, persistent state, Networks/Cargo behavior, and rollback protections.
+
 ## Supreme Legacy 1.0.8
 
 ### Mob Scanner Performance
