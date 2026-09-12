@@ -11,8 +11,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.8"
-  OUTPUT_NAME: "SF_Supreme1.0.8.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.9"
+  OUTPUT_NAME: "SF_Supreme1.0.9.jar"
 
 jobs:
   build-legacy:
@@ -72,7 +72,7 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${LEGACY_ARTIFACT_VERSION}"; fi
           JAR="dist/${OUTPUT_NAME}"
-          NOTES="Supreme Legacy 1.0.8 reduces synchronized mob-scanning cost. Mob Collector now performs at most one nearby LivingEntity query per recipe-selection pass and reuses that fresh snapshot across its candidate recipes, instead of repeating a world proximity query for each matching tool recipe. Idle Mob Collectors that find no usable recipe/mob retry every 4 ticks while active processing remains unchanged. MobTech Collector now uses the same single-snapshot approach for Bee, Iron Golem, and Zombie selection while still storing and revalidating the exact matched entity before processing starts. Existing recipes, drops, output quantities, scan ranges, bottle/tool costs, staged inputs, persistence, processing speeds, and energy behavior are unchanged."
+          NOTES="Supreme Legacy 1.0.9 improves idle efficiency and forward compatibility without changing Supreme gameplay. Virtual Garden, Virtual Aquarium, Tech Mutation, and Tech Robotic now back off repeated recipe scans only while their relevant inventories are unchanged; any input/output change wakes the machine immediately, while active cycles, output-full recovery, mutation rolls, selected aquarium outputs, tool durability, processing speeds, energy costs, recipes, item IDs, and persisted state remain unchanged. CI now compiles Supreme against Paper 26.2 and the 26.3 API line on Java 25 in addition to Slimefun Legacy, Gugu, and United so upcoming Minecraft/Paper API changes are detected before release."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
