@@ -50,6 +50,7 @@ public class TechMutation extends SimpleItemContainerMachine
 
   private static final String STATE_TYPE = "TECH_MUTATION";
   private static final int PROGRESS_CHECKPOINT_INTERVAL = 20;
+  private static final long IDLE_RETRY_TICKS = 4L;
 
   private record MutationCycle(ItemStack input1, ItemStack input2, ItemStack output, int chance) {
   }
@@ -89,6 +90,7 @@ public class TechMutation extends SimpleItemContainerMachine
   private final Map<Block, Integer> progressTime = new HashMap<>();
   private final Map<Block, Boolean> successfulMutations = new HashMap<>();
   private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
+  private final Map<Block, Long> nextIdleCheck = new HashMap<>();
   private int speed = 1;
   private int upgradeLuck = 1;
 
@@ -182,12 +184,19 @@ public class TechMutation extends SimpleItemContainerMachine
     restoreStateIfNeeded(b);
     MutationCycle itemProcessing = processing.get(b);
     if (itemProcessing == null) {
+      long gameTime = b.getWorld().getGameTime();
+      if (gameTime < nextIdleCheck.getOrDefault(b, 0L)) {
+        return;
+      }
+
       MobTechMutationGeneric itemRecipe = validRecipeItem(inv);
       if (itemRecipe == null) {
+        nextIdleCheck.put(b, gameTime + IDLE_RETRY_TICKS);
         invalidProgressBar(inv, "&cTechMutation unidentified recipe");
         return;
       }
 
+      nextIdleCheck.remove(b);
       ItemStack output = itemRecipe.getOutput().clone();
       if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), output)) {
         invalidProgressBar(inv, "&cOutput is full");
@@ -315,6 +324,7 @@ public class TechMutation extends SimpleItemContainerMachine
         processing.put(block, cycle);
         progressTime.put(block, Math.max(0, state.progress()));
         lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
+        nextIdleCheck.remove(block);
         if ("true".equalsIgnoreCase(state.auxText())) {
           successfulMutations.put(block, true);
         } else if ("false".equalsIgnoreCase(state.auxText())) {
@@ -346,6 +356,7 @@ public class TechMutation extends SimpleItemContainerMachine
     progressTime.remove(block);
     successfulMutations.remove(block);
     lastProgressCheckpoint.remove(block);
+    nextIdleCheck.remove(block);
     SupremeSpecialMachineStateCodec.clear(block);
   }
 
@@ -376,6 +387,7 @@ public class TechMutation extends SimpleItemContainerMachine
     MutationCycle cycle = processing.get(block);
     if (cycle == null) {
       lines.add("State: IDLE / waiting for mutation inputs");
+      lines.add("Idle recipe retry: every " + IDLE_RETRY_TICKS + " ticks while no recipe matches");
       return lines;
     }
 
