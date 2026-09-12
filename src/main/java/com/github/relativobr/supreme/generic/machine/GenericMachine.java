@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ChestMenu;
@@ -61,13 +62,15 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private static final long IDLE_BACKOFF_TICKS = 4L;
   private static final int PROGRESS_CHECKPOINT_INTERVAL = 20;
 
-  private final Map<Block, MachineRecipe> processing = new HashMap<>();
-  private final Map<Block, Integer> progressTime = new HashMap<>();
-  private final Map<Block, Map<ItemStack, Integer>> consumedItemsMap = new HashMap<>();
-  private final Map<Block, Integer> attemptCount = new HashMap<>();
-  private final Map<Block, Long> heavyCheckAfter = new HashMap<>();
-  private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
-  private final Map<Block, Map<ItemStack, Integer>> activeRequiredItems = new HashMap<>();
+  // AContainer ticks asynchronously on Paper/Purpur, while transport and block-break paths may
+  // inspect or clear the same placed-machine state from another server-owned thread.
+  private final Map<Block, MachineRecipe> processing = new ConcurrentHashMap<>();
+  private final Map<Block, Integer> progressTime = new ConcurrentHashMap<>();
+  private final Map<Block, Map<ItemStack, Integer>> consumedItemsMap = new ConcurrentHashMap<>();
+  private final Map<Block, Integer> attemptCount = new ConcurrentHashMap<>();
+  private final Map<Block, Long> heavyCheckAfter = new ConcurrentHashMap<>();
+  private final Map<Block, Integer> lastProgressCheckpoint = new ConcurrentHashMap<>();
+  private final Map<Block, Map<ItemStack, Integer>> activeRequiredItems = new ConcurrentHashMap<>();
   private final List<RecipeCache> recipeCaches = new ArrayList<>();
   private final Map<Material, List<RecipeCache>> transportRecipeIndex = new HashMap<>();
   public final List<AbstractItemRecipe> machineRecipes = new ArrayList<>();
@@ -565,7 +568,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   }
 
   protected Map<ItemStack, Integer> getConsumedItems(Block b) {
-    return consumedItemsMap.computeIfAbsent(b, ignored -> new LinkedHashMap<>());
+    return consumedItemsMap.computeIfAbsent(b, ignored -> new ConcurrentHashMap<>());
   }
 
   protected boolean isProcessing(Block b) {
@@ -582,7 +585,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       processing.put(b, next);
       activeRequiredItems.put(b, groupSimilarItems(next.getInput()));
       progressTime.put(b, next.getTicks());
-      consumedItemsMap.put(b, new LinkedHashMap<>());
+      consumedItemsMap.put(b, new ConcurrentHashMap<>());
       attemptCount.put(b, 0);
       heavyCheckAfter.remove(b);
       lastProgressCheckpoint.put(b, next.getTicks());
@@ -1109,7 +1112,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       activeRequiredItems.put(b, groupSimilarItems(state.recipe().getInput()));
       progressTime.put(b, Math.max(0, state.progress()));
       attemptCount.put(b, Math.max(0, state.attempts()));
-      consumedItemsMap.put(b, new LinkedHashMap<>(state.consumedItems()));
+      consumedItemsMap.put(b, new ConcurrentHashMap<>(state.consumedItems()));
       lastProgressCheckpoint.put(b, Math.max(0, state.progress()));
       heavyCheckAfter.remove(b);
       return true;
