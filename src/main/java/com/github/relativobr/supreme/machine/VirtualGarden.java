@@ -45,6 +45,7 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
 
   private static final String STATE_TYPE = "VIRTUAL_GARDEN";
   private static final int PROGRESS_CHECKPOINT_INTERVAL = 20;
+  private static final long IDLE_RETRY_TICKS = 4L;
 
   public static final SlimefunItemStack VIRTUAL_GARDEN_MACHINE = new SupremeItemStack("SUPREME_VIRTUAL_GARDEN_I",
       Material.STRIPPED_WARPED_HYPHAE, "&bVirtual Garden", "", "&fThis machine allows you to",
@@ -77,6 +78,7 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
   private final Map<Block, MachineRecipe> processing = new HashMap<>();
   private final Map<Block, Integer> progress = new HashMap<>();
   private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
+  private final Map<Block, Long> nextIdleCheck = new HashMap<>();
   private final Set<VirtualGardenMachineRecipe> virtualGardenMachineRecipes = new HashSet<>();
 
   @ParametersAreNonnullByDefault
@@ -144,13 +146,20 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
     restoreStateIfNeeded(b);
     MachineRecipe active = processing.get(b);
     if (active == null) {
+      long gameTime = b.getWorld().getGameTime();
+      if (gameTime < nextIdleCheck.getOrDefault(b, 0L)) {
+        return;
+      }
+
       MachineRecipe next = findNextRecipe(inv);
       if (next != null) {
+        nextIdleCheck.remove(b);
         processing.put(b, next);
         progress.put(b, next.getTicks());
         lastProgressCheckpoint.put(b, next.getTicks());
         persistState(b, next, next.getTicks());
       } else {
+        nextIdleCheck.put(b, gameTime + IDLE_RETRY_TICKS);
         updateStatusReset(inv);
       }
       return;
@@ -213,6 +222,7 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
         processing.put(block, recipe);
         progress.put(block, Math.max(0, state.progress()));
         lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
+        nextIdleCheck.remove(block);
         return true;
       }
     }
@@ -225,6 +235,7 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
     processing.remove(block);
     progress.remove(block);
     lastProgressCheckpoint.remove(block);
+    nextIdleCheck.remove(block);
     SupremeSpecialMachineStateCodec.clear(block);
   }
 
@@ -249,6 +260,7 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
     MachineRecipe active = processing.get(block);
     if (active == null) {
       lines.add("State: IDLE / waiting for cultivation input");
+      lines.add("Idle recipe retry: " + IDLE_RETRY_TICKS + " ticks");
       return lines;
     }
 
