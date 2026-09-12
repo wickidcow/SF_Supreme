@@ -1,5 +1,15 @@
 # Changelog
 
+## Supreme Legacy 1.0.10
+
+### Async Output Recovery Safety
+
+- Hardened the emergency machine-output leftover path used only when a concurrent inventory change races the normal output-capacity preflight.
+- `SupremeInventoryUtils.pushAll` now schedules unavoidable fallback item-entity creation through Paper's owning-region scheduler instead of calling `World#dropItemNaturally` directly from an asynchronous Slimefun ticker.
+- Added a CI invariant that requires the region-scheduler handoff and rejects direct item spawning inside the shared output helper.
+- Normal output insertion is unchanged. Recipes, output quantities, processing speeds, energy costs, item IDs, persistence, rollback behavior, and Networks/Cargo routing remain unchanged.
+- Compatibility coverage remains Slimefun Legacy, Gugu, United, Paper 26.2, Paper 26.3, and rolling-latest Paper.
+
 ## Supreme Legacy 1.0.9
 
 ### Specialized Machine Idle Efficiency
