@@ -54,6 +54,7 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
 
   private static final String STATE_TYPE = "MOB_COLLECTOR";
   private static final int PROGRESS_CHECKPOINT_INTERVAL = 20;
+  private static final long IDLE_SCAN_BACKOFF_TICKS = 4L;
 
   public static final SlimefunItemStack MOB_COLLECTOR_MACHINE = new SupremeItemStack("SUPREME_MOB_COLLECTOR_MACHINE_I",
       Material.RESPAWN_ANCHOR, "&bMob Collector", "", "&fThis machine allows you to collect ",
@@ -88,6 +89,7 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
   private final Map<Block, Integer> progress = new HashMap<>();
   private final Map<Block, Integer> selectedInputSlots = new HashMap<>();
   private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
+  private final Map<Block, Long> nextIdleScan = new HashMap<>();
   private final Set<MobCollectorMachineRecipe> mobCollectorMachineRecipes = new HashSet<>();
   private int mobRange = 4;
 
@@ -270,6 +272,7 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
   protected MachineRecipe findNextRecipe(@Nonnull BlockMenu inv) {
     Block block = inv.getBlock();
     selectedInputSlots.remove(block);
+    List<LivingEntity> nearbyEntities = null;
 
     for (int slot : getInputSlots()) {
       ItemStack itemInSlot = inv.getItemInSlot(slot);
@@ -289,7 +292,15 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
         if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), produce.getOutput())) {
           continue;
         }
-        if (isAnimalNearby(block, produce::test)) {
+
+        if (nearbyEntities == null) {
+          nearbyEntities = getNearbyLivingEntities(block);
+          if (nearbyEntities.isEmpty()) {
+            return null;
+          }
+        }
+
+        if (hasMatchingEntity(nearbyEntities, produce::test)) {
           selectedInputSlots.put(block, slot);
           return produce;
         }
@@ -298,15 +309,25 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
     return null;
   }
 
-  @ParametersAreNonnullByDefault
-  private boolean isAnimalNearby(Block b, Predicate<LivingEntity> predicate) {
-    return !b.getWorld().getNearbyEntities(b.getLocation(), mobRange, mobRange, mobRange,
-        n -> isValidAnimal(n, predicate)).isEmpty();
+  private List<LivingEntity> getNearbyLivingEntities(Block block) {
+    List<LivingEntity> livingEntities = new ArrayList<>();
+    for (Entity entity : block.getWorld().getNearbyEntities(
+        block.getLocation(), mobRange, mobRange, mobRange)) {
+      if (entity instanceof LivingEntity living) {
+        livingEntities.add(living);
+      }
+    }
+    return livingEntities;
   }
 
-  @ParametersAreNonnullByDefault
-  private boolean isValidAnimal(Entity n, Predicate<LivingEntity> predicate) {
-    return n instanceof LivingEntity && predicate.test((LivingEntity) n);
+  private boolean hasMatchingEntity(List<LivingEntity> nearbyEntities,
+      Predicate<LivingEntity> predicate) {
+    for (LivingEntity entity : nearbyEntities) {
+      if (predicate.test(entity)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public final MobCollector setMobRange(int value) {
@@ -324,8 +345,14 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
     restoreStateIfNeeded(b);
     MachineRecipe active = processing.get(b);
     if (active == null) {
+      long gameTime = b.getWorld().getGameTime();
+      if (gameTime < nextIdleScan.getOrDefault(b, 0L)) {
+        return;
+      }
+
       MachineRecipe next = findNextRecipe(inv);
       if (next != null) {
+        nextIdleScan.remove(b);
         Integer slot = selectedInputSlots.get(b);
         if (slot == null) {
           clearCollectorState(b);
@@ -337,6 +364,7 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
         lastProgressCheckpoint.put(b, next.getTicks());
         persistState(b, next, slot, next.getTicks());
       } else {
+        nextIdleScan.put(b, gameTime + IDLE_SCAN_BACKOFF_TICKS);
         updateStatusReset(inv);
       }
       return;
@@ -441,6 +469,7 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
         progress.put(block, Math.max(0, state.progress()));
         selectedInputSlots.put(block, state.auxInt());
         lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
+        nextIdleScan.remove(block);
         return true;
       }
     }
@@ -454,6 +483,7 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
     progress.remove(block);
     selectedInputSlots.remove(block);
     lastProgressCheckpoint.remove(block);
+    nextIdleScan.remove(block);
     SupremeSpecialMachineStateCodec.clear(block);
   }
 
@@ -478,7 +508,8 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
     MachineRecipe active = processing.get(block);
     if (active == null) {
       lines.add("State: IDLE / waiting for valid tool and nearby mob");
-      lines.add("Mob scan range: " + mobRange + " blocks");
+      lines.add("Mob scan range: " + mobRange + " blocks | Idle scan backoff: "
+          + IDLE_SCAN_BACKOFF_TICKS + " ticks");
       return lines;
     }
 

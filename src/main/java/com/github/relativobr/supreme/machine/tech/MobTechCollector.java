@@ -24,6 +24,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.inventory.InvUtils;
 import io.github.thebusybiscuit.slimefun4.utils.LoreBuilder;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -133,6 +134,8 @@ public class MobTechCollector extends SimpleItemWithLargeContainerMachine {
 
   @Override
   protected MachineRecipe findNextRecipe(@Nonnull BlockMenu inv) {
+    List<LivingEntity> nearbyEntities = null;
+
     for (int slot : getInputSlots()) {
       ItemStack itemInSlot = inv.getItemInSlot(slot);
       if (itemInSlot == null || !SlimefunUtils.isItemSimilar(itemInSlot,
@@ -145,7 +148,14 @@ public class MobTechCollector extends SimpleItemWithLargeContainerMachine {
           continue;
         }
 
-        LivingEntity entity = findAnimalNearby(inv.getBlock(), produce::test);
+        if (nearbyEntities == null) {
+          nearbyEntities = getNearbyLivingEntities(inv.getBlock());
+          if (nearbyEntities.isEmpty()) {
+            return null;
+          }
+        }
+
+        LivingEntity entity = findMatchingEntity(nearbyEntities, produce::test);
         if (entity != null) {
           // Do not consume here. GenericMachine will reserve the recipe input exactly once.
           pendingEntities.put(inv.getBlock(), entity);
@@ -156,12 +166,22 @@ public class MobTechCollector extends SimpleItemWithLargeContainerMachine {
     return null;
   }
 
-  @ParametersAreNonnullByDefault
-  private LivingEntity findAnimalNearby(Block block, Predicate<LivingEntity> predicate) {
+  private List<LivingEntity> getNearbyLivingEntities(Block block) {
+    List<LivingEntity> livingEntities = new ArrayList<>();
     for (Entity entity : block.getWorld().getNearbyEntities(
         block.getLocation(), mobRange, mobRange, mobRange)) {
-      if (entity instanceof LivingEntity living && predicate.test(living)) {
-        return living;
+      if (entity instanceof LivingEntity living) {
+        livingEntities.add(living);
+      }
+    }
+    return livingEntities;
+  }
+
+  private LivingEntity findMatchingEntity(List<LivingEntity> nearbyEntities,
+      Predicate<LivingEntity> predicate) {
+    for (LivingEntity entity : nearbyEntities) {
+      if (predicate.test(entity)) {
+        return entity;
       }
     }
     return null;
