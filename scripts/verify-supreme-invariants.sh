@@ -80,7 +80,10 @@ if [[ "$(grep -c 'getNearbyEntities(' "$MOBTECH_COLLECTOR")" -ne 1 ]]; then
   exit 1
 fi
 
-# Specialized synchronized machines must avoid repeating expensive idle recipe scans every tick.
+# Specialized synchronized machines must avoid repeated idle recipe scans while still waking
+# immediately when relevant inventory contents change.
+INVENTORY_UTIL="$JAVA/util/SupremeInventoryUtils.java"
+grep -q 'static int fingerprint' "$INVENTORY_UTIL"
 for machine in \
   "$JAVA/machine/VirtualGarden.java" \
   "$JAVA/machine/VirtualAquarium.java" \
@@ -88,8 +91,10 @@ for machine in \
   "$JAVA/machine/tech/TechRobotic.java"; do
   grep -q 'IDLE_RETRY_TICKS = 4L' "$machine"
   grep -q 'nextIdleCheck' "$machine"
+  grep -q 'lastIdleFingerprint' "$machine"
+  grep -q 'SupremeInventoryUtils.fingerprint' "$machine"
   grep -q 'getGameTime()' "$machine"
-  grep -q 'nextIdleCheck.remove(block)\|nextIdleCheck.remove(b)' "$machine"
+  grep -q 'clearIdleBackoff' "$machine"
 done
 
 grep -q 'loadReservedOnly' "$JAVA/machine/tech/TechRobotic.java"
@@ -124,4 +129,4 @@ grep -q 'setMachineIdentifier(TechRobotic.TECH_ROBOTIC_III.getItemId())' "$SETUP
 
 grep -q 'SupremeMachineDiagnostics diagnostics' "$JAVA/command/SupremeCommand.java"
 
-echo "Supreme machine, transport, mob scan, idle backoff, rollback, persistence, armor, and energy invariants verified."
+echo "Supreme machine, transport, mob scan, inventory-aware idle backoff, rollback, persistence, armor, and energy invariants verified."
