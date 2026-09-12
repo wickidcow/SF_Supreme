@@ -1,5 +1,23 @@
 # Changelog
 
+## Supreme Legacy 1.0.7
+
+### Networks / Cargo Routing Performance
+
+- Precomputes grouped recipe requirements when GenericMachine recipe sets are registered instead of rebuilding those maps during every automated insertion query.
+- Indexes candidate recipes by incoming Bukkit material, then keeps Slimefun item-similarity checks as the authoritative identity check for custom items.
+- Reuses grouped requirements for active staged recipes and rebuilds the per-block cache when persisted machine state is restored after a restart.
+- Replaces temporary partial-slot list allocation and sorting with a single-pass fullest-stack selection while preserving first-slot tie behavior.
+- Applies the existing 4-tick heavy-check backoff when staged recipes make no input progress; successful 64-item staging remains full-speed.
+- `/supreme doctor machine` now reports the current no-progress attempt count and staging backoff while a machine waits for additional material.
+- Electric Core, Electric Magical, Electric Gear, Forge, Foundry, Magic Altar, Electric Crafter and other GenericMachine-based systems receive the shared routing optimization.
+
+### Correctness
+
+- Tech Robotic II and Tech Robotic III now register their own tier-specific machine identifiers instead of reusing the base Tech Robotic identifier.
+- Expanded CI invariants to guard recipe-routing caches, no-progress staging backoff, allocation-free partial-slot selection and Tech Robotic tier identifiers.
+- Preserved existing item IDs, recipes, output quantities, processing speeds, energy costs, staged quantities, persistent state, rollback protections and zero-capacity transport sentinels.
+
 ## Supreme Legacy 1.0.6
 
 ### Rollback Backpressure Safety
