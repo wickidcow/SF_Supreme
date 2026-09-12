@@ -1,5 +1,18 @@
 # Changelog
 
+## Supreme Legacy 1.0.8
+
+### Mob Scanner Performance
+
+- Mob Collector now performs at most one nearby LivingEntity query per recipe-selection pass and reuses that fresh snapshot across all candidate tool recipes.
+- Removed the previous pattern where a sword, shears, or bottle could trigger another world proximity query for each candidate Mob Collector recipe.
+- Idle Mob Collectors that find no usable recipe/mob now retry every 4 ticks instead of repeating synchronized entity scans every tick; active processing remains full-speed.
+- MobTech Collector now reuses one nearby LivingEntity snapshot while checking enabled Bee, Iron Golem, and Zombie recipes.
+- MobTech Collector still stores the exact matched entity and revalidates its validity, world, range, and recipe predicate immediately before processing starts.
+- `/supreme doctor machine` now reports the Mob Collector idle scan backoff alongside its scan range.
+- Expanded CI invariants to require a single nearby-entity query implementation for both Mob Collector and MobTech Collector.
+- Preserved existing recipes, drops, output quantities, scan ranges, bottle/tool costs, staged inputs, persistence, processing speeds, and energy behavior.
+
 ## Supreme Legacy 1.0.7
 
 ### Networks / Cargo Routing Performance
