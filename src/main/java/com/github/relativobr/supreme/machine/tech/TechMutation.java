@@ -91,6 +91,7 @@ public class TechMutation extends SimpleItemContainerMachine
   private final Map<Block, Boolean> successfulMutations = new HashMap<>();
   private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
   private final Map<Block, Long> nextIdleCheck = new HashMap<>();
+  private final Map<Block, Integer> lastIdleFingerprint = new HashMap<>();
   private int speed = 1;
   private int upgradeLuck = 1;
 
@@ -185,18 +186,21 @@ public class TechMutation extends SimpleItemContainerMachine
     MutationCycle itemProcessing = processing.get(b);
     if (itemProcessing == null) {
       long gameTime = b.getWorld().getGameTime();
-      if (gameTime < nextIdleCheck.getOrDefault(b, 0L)) {
+      int fingerprint = SupremeInventoryUtils.fingerprint(inv, getInputSlots());
+      if (gameTime < nextIdleCheck.getOrDefault(b, 0L)
+          && fingerprint == lastIdleFingerprint.getOrDefault(b, Integer.MIN_VALUE)) {
         return;
       }
 
       MobTechMutationGeneric itemRecipe = validRecipeItem(inv);
       if (itemRecipe == null) {
+        lastIdleFingerprint.put(b, fingerprint);
         nextIdleCheck.put(b, gameTime + IDLE_RETRY_TICKS);
         invalidProgressBar(inv, "&cTechMutation unidentified recipe");
         return;
       }
 
-      nextIdleCheck.remove(b);
+      clearIdleBackoff(b);
       ItemStack output = itemRecipe.getOutput().clone();
       if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), output)) {
         invalidProgressBar(inv, "&cOutput is full");
@@ -324,7 +328,7 @@ public class TechMutation extends SimpleItemContainerMachine
         processing.put(block, cycle);
         progressTime.put(block, Math.max(0, state.progress()));
         lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
-        nextIdleCheck.remove(block);
+        clearIdleBackoff(block);
         if ("true".equalsIgnoreCase(state.auxText())) {
           successfulMutations.put(block, true);
         } else if ("false".equalsIgnoreCase(state.auxText())) {
@@ -351,12 +355,17 @@ public class TechMutation extends SimpleItemContainerMachine
     }
   }
 
+  private void clearIdleBackoff(Block block) {
+    nextIdleCheck.remove(block);
+    lastIdleFingerprint.remove(block);
+  }
+
   private void clearState(Block block) {
     processing.remove(block);
     progressTime.remove(block);
     successfulMutations.remove(block);
     lastProgressCheckpoint.remove(block);
-    nextIdleCheck.remove(block);
+    clearIdleBackoff(block);
     SupremeSpecialMachineStateCodec.clear(block);
   }
 
@@ -387,7 +396,8 @@ public class TechMutation extends SimpleItemContainerMachine
     MutationCycle cycle = processing.get(block);
     if (cycle == null) {
       lines.add("State: IDLE / waiting for mutation inputs");
-      lines.add("Idle recipe retry: every " + IDLE_RETRY_TICKS + " ticks while no recipe matches");
+      lines.add("Idle recipe retry: every " + IDLE_RETRY_TICKS
+          + " ticks while mutation inputs are unchanged");
       return lines;
     }
 
