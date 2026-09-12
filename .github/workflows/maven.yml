@@ -79,6 +79,38 @@ jobs:
             gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_Supreme $TAG" --notes "$NOTES"
           fi
 
+  compatibility-paper:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        paper-version:
+          - "[26.2.build,26.3.build)"
+          - "[26.3.build,26.4.build)"
+    steps:
+      - name: Checkout Supreme Legacy
+        uses: actions/checkout@v5
+      - name: Checkout Slimefun Legacy API
+        uses: actions/checkout@v5
+        with:
+          repository: wickidcow/Slimefun-Legacy
+          path: slimefun-legacy
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Publish Slimefun Legacy API locally
+        working-directory: slimefun-legacy
+        run: |
+          chmod +x gradlew
+          ./gradlew publishToMavenLocal -x test -PprojectVersion=Legacy-SNAPSHOT
+      - name: Compile Supreme against Paper API line
+        env:
+          PAPER_VERSION: ${{ matrix.paper-version }}
+        run: mvn -B -Plegacy -Dpaper.version="$PAPER_VERSION" -DskipTests clean package
+
   compatibility-gugu:
     runs-on: ubuntu-latest
     steps:
