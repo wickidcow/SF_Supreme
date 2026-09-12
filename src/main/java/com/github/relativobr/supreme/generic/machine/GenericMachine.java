@@ -21,13 +21,13 @@ import io.github.thebusybiscuit.slimefun4.libraries.dough.protection.Interaction
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ChestMenu;
@@ -67,9 +67,26 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private final Map<Block, Integer> attemptCount = new HashMap<>();
   private final Map<Block, Long> heavyCheckAfter = new HashMap<>();
   private final Map<Block, Integer> lastProgressCheckpoint = new HashMap<>();
+  private final Map<Block, Map<ItemStack, Integer>> activeRequiredItems = new HashMap<>();
+  private final List<RecipeCache> recipeCaches = new ArrayList<>();
+  private final Map<Material, List<RecipeCache>> transportRecipeIndex = new HashMap<>();
   public final List<AbstractItemRecipe> machineRecipes = new ArrayList<>();
   private Integer timeProcess;
   private String machineIdentifier = "MediumContainerMachine";
+
+  private static final class RecipeCache {
+
+    private final AbstractItemRecipe recipe;
+    private final ItemStack[] input;
+    private final Map<ItemStack, Integer> requiredItems;
+
+    private RecipeCache(AbstractItemRecipe recipe, ItemStack[] input,
+        Map<ItemStack, Integer> requiredItems) {
+      this.recipe = recipe;
+      this.input = input;
+      this.requiredItems = requiredItems;
+    }
+  }
 
   @ParametersAreNonnullByDefault
   public GenericMachine(ItemGroup category, SlimefunItemStack item, RecipeType recipeType,
@@ -124,7 +141,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return getInputSlots();
     }
 
-    ItemStack[] selectedRecipe = null;
+    Map<ItemStack, Integer> requiredItems = null;
     Map<ItemStack, Integer> reservedItems = Map.of();
 
     if (menu instanceof BlockMenu blockMenu) {
@@ -139,19 +156,19 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
           // empty slot response back to the machine's normal inputs.
           return new int[]{getStatusSlot()};
         }
-        selectedRecipe = activeRecipe.getInput();
+        requiredItems = getActiveRequiredItems(block, activeRecipe.getInput());
         reservedItems = getConsumedItems(block);
       }
     }
 
-    if (selectedRecipe == null) {
-      selectedRecipe = findTransportRecipe(menu, item);
-    }
-    if (selectedRecipe == null) {
-      return new int[0];
+    if (requiredItems == null) {
+      RecipeCache selectedRecipe = findTransportRecipe(menu, item);
+      if (selectedRecipe == null) {
+        return new int[0];
+      }
+      requiredItems = selectedRecipe.requiredItems;
     }
 
-    Map<ItemStack, Integer> requiredItems = groupSimilarItems(selectedRecipe);
     ItemStack requiredTemplate = null;
     int requiredAmount = 0;
     for (Map.Entry<ItemStack, Integer> entry : requiredItems.entrySet()) {
@@ -176,7 +193,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return new int[]{fullMatchingSlot >= 0 ? fullMatchingSlot : getStatusSlot()};
     }
 
-    List<Integer> partialMatching = new LinkedList<>();
+    int bestPartialSlot = -1;
+    int bestPartialAmount = -1;
     int fullMatchingSlot = -1;
     int firstEmptySlot = -1;
 
@@ -194,16 +212,17 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       }
 
       if (stack.getAmount() < stack.getMaxStackSize()) {
-        partialMatching.add(slot);
+        if (stack.getAmount() > bestPartialAmount) {
+          bestPartialSlot = slot;
+          bestPartialAmount = stack.getAmount();
+        }
       } else if (fullMatchingSlot < 0) {
         fullMatchingSlot = slot;
       }
     }
 
-    partialMatching.sort(Comparator.comparingInt(
-        slot -> -menu.getItemInSlot(slot).getAmount()));
-    if (!partialMatching.isEmpty()) {
-      return new int[]{partialMatching.get(0)};
+    if (bestPartialSlot >= 0) {
+      return new int[]{bestPartialSlot};
     }
 
     // A full matching slot is deliberately returned as a zero-capacity sentinel until the ticker
@@ -233,13 +252,17 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
    * present in the machine. When several recipes are possible, prefer the one with the most distinct
    * ingredients already represented in the input inventory.
    */
-  private ItemStack[] findTransportRecipe(DirtyChestMenu menu, ItemStack incoming) {
-    ItemStack[] bestRecipe = null;
+  private RecipeCache findTransportRecipe(DirtyChestMenu menu, ItemStack incoming) {
+    List<RecipeCache> candidates = transportRecipeIndex.get(incoming.getType());
+    if (candidates == null || candidates.isEmpty()) {
+      return null;
+    }
+
+    RecipeCache bestRecipe = null;
     int bestMatchedIngredients = -1;
 
-    for (AbstractItemRecipe recipe : machineRecipes) {
-      ItemStack[] input = recipe.getInputNotNull();
-      Map<ItemStack, Integer> requiredItems = groupSimilarItems(input);
+    for (RecipeCache recipe : candidates) {
+      Map<ItemStack, Integer> requiredItems = recipe.requiredItems;
       if (!containsSimilar(requiredItems, incoming)) {
         continue;
       }
@@ -267,7 +290,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       }
 
       if (matchedIngredients > bestMatchedIngredients) {
-        bestRecipe = input;
+        bestRecipe = recipe;
         bestMatchedIngredients = matchedIngredients;
       }
     }
@@ -378,7 +401,28 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   public GenericMachine setMachineRecipes(@Nonnull List<AbstractItemRecipe> recipes) {
     machineRecipes.clear();
     machineRecipes.addAll(recipes);
+    rebuildRecipeCaches();
     return this;
+  }
+
+  private void rebuildRecipeCaches() {
+    recipeCaches.clear();
+    transportRecipeIndex.clear();
+
+    for (AbstractItemRecipe recipe : machineRecipes) {
+      ItemStack[] input = recipe.getInputNotNull();
+      Map<ItemStack, Integer> requiredItems = groupSimilarItems(input);
+      RecipeCache cache = new RecipeCache(recipe, input, requiredItems);
+      recipeCaches.add(cache);
+
+      Set<Material> indexedMaterials = new HashSet<>();
+      for (ItemStack required : requiredItems.keySet()) {
+        Material type = required.getType();
+        if (indexedMaterials.add(type)) {
+          transportRecipeIndex.computeIfAbsent(type, ignored -> new ArrayList<>()).add(cache);
+        }
+      }
+    }
   }
 
   public GenericMachine setTimeProcess(int timeProcess) {
@@ -504,10 +548,9 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
   @Override
   protected MachineRecipe findNextRecipe(BlockMenu inv) {
-    for (AbstractItemRecipe recipe : machineRecipes) {
-      ItemStack[] input = recipe.getInputNotNull();
-      if (matchingRecipe(input, inv)) {
-        return new MachineRecipe(getTimeProcess(), input, recipe.getOutputNotNull());
+    for (RecipeCache recipe : recipeCaches) {
+      if (matchingRecipe(recipe.requiredItems, inv)) {
+        return new MachineRecipe(getTimeProcess(), recipe.input, recipe.recipe.getOutputNotNull());
       }
     }
     return null;
@@ -537,6 +580,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     MachineRecipe next = findNextRecipe(inv);
     if (next != null) {
       processing.put(b, next);
+      activeRequiredItems.put(b, groupSimilarItems(next.getInput()));
       progressTime.put(b, next.getTicks());
       consumedItemsMap.put(b, new LinkedHashMap<>());
       attemptCount.put(b, 0);
@@ -560,6 +604,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     consumedItemsMap.remove(b);
     heavyCheckAfter.remove(b);
     lastProgressCheckpoint.remove(b);
+    activeRequiredItems.remove(b);
     SupremeMachineStateCodec.clear(b);
   }
 
@@ -654,7 +699,10 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       SupremeMachineStateCodec.saveAttempts(b, attempts);
       int progressCount = countReservedAndVisibleRecipeInputs(b, inv, recipe.getInput());
       updateStatusLoadMaterial(inv, recipe.getOutput()[0], attempts, progressCount,
-          totalRecipeAmount(recipe.getInput()));
+          totalRecipeAmount(b, recipe.getInput()));
+      if (stagedThisTick == 0) {
+        backoff(b);
+      }
       return;
     }
 
@@ -711,7 +759,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
    * Reserves at most one legal stack of every still-missing ingredient on this ticker pass.
    */
   private int reserveAvailableInputBatch(Block b, BlockMenu inv, ItemStack[] recipe) {
-    Map<ItemStack, Integer> requiredItems = groupSimilarItems(recipe);
+    Map<ItemStack, Integer> requiredItems = getActiveRequiredItems(b, recipe);
     Map<ItemStack, Integer> consumedItems = getConsumedItems(b);
     int totalConsumedNow = 0;
 
@@ -934,7 +982,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
   private boolean hasAllReservedInputs(Block b, ItemStack[] recipe) {
     Map<ItemStack, Integer> consumedItems = getConsumedItems(b);
-    for (Map.Entry<ItemStack, Integer> entry : groupSimilarItems(recipe).entrySet()) {
+    for (Map.Entry<ItemStack, Integer> entry : getActiveRequiredItems(b, recipe).entrySet()) {
       if (countMapAmount(consumedItems, entry.getKey()) < entry.getValue()) {
         return false;
       }
@@ -945,7 +993,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private int countReservedAndVisibleRecipeInputs(Block b, BlockMenu inv, ItemStack[] recipe) {
     int available = 0;
     Map<ItemStack, Integer> consumedItems = getConsumedItems(b);
-    for (Map.Entry<ItemStack, Integer> entry : groupSimilarItems(recipe).entrySet()) {
+    for (Map.Entry<ItemStack, Integer> entry : getActiveRequiredItems(b, recipe).entrySet()) {
       int reserved = countMapAmount(consumedItems, entry.getKey());
       int visible = countAvailable(inv, entry.getKey());
       available += Math.min(entry.getValue(), reserved + visible);
@@ -953,8 +1001,12 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     return available;
   }
 
-  private int totalRecipeAmount(ItemStack[] recipe) {
-    return groupSimilarItems(recipe).values().stream().mapToInt(Integer::intValue).sum();
+  private int totalRecipeAmount(Block b, ItemStack[] recipe) {
+    int total = 0;
+    for (int amount : getActiveRequiredItems(b, recipe).values()) {
+      total += amount;
+    }
+    return total;
   }
 
   private int countAvailable(BlockMenu inv, ItemStack requiredItem) {
@@ -969,10 +1021,10 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     return amount;
   }
 
-  private boolean matchingRecipe(ItemStack[] recipe, BlockMenu inv) {
+  private boolean matchingRecipe(Map<ItemStack, Integer> requiredItems, BlockMenu inv) {
     // One visible item of each distinct ingredient is enough to select a recipe. The staged
     // reservation engine then consumes one legal stack at a time until the full quantities arrive.
-    for (ItemStack required : groupSimilarItems(recipe).keySet()) {
+    for (ItemStack required : requiredItems.keySet()) {
       boolean present = false;
       for (int slot : getInputSlots()) {
         ItemStack itemInSlot = inv.getItemInSlot(slot);
@@ -987,6 +1039,10 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       }
     }
     return true;
+  }
+
+  private Map<ItemStack, Integer> getActiveRequiredItems(Block block, ItemStack[] recipe) {
+    return activeRequiredItems.computeIfAbsent(block, ignored -> groupSimilarItems(recipe));
   }
 
   private Map<ItemStack, Integer> groupSimilarItems(ItemStack[] items) {
@@ -1050,6 +1106,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     if (restored.isPresent()) {
       SupremeMachineStateCodec.State state = restored.get();
       processing.put(b, state.recipe());
+      activeRequiredItems.put(b, groupSimilarItems(state.recipe().getInput()));
       progressTime.put(b, Math.max(0, state.progress()));
       attemptCount.put(b, Math.max(0, state.attempts()));
       consumedItemsMap.put(b, new LinkedHashMap<>(state.consumedItems()));
@@ -1113,9 +1170,13 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     }
     lines.add("State: " + state + " | Progress: " + progress + "/" + recipe.getTicks());
     lines.add("Output space: " + (!notHasSpaceOutput(inv, recipe.getOutput()) ? "available" : "full"));
+    if (state.equals("STAGING INPUTS")) {
+      lines.add("No-progress attempts: " + attemptCount.getOrDefault(block, 0) + "/"
+          + getMaxAttemptConsumed() + " (checks back off by " + IDLE_BACKOFF_TICKS + " ticks)");
+    }
 
     Map<ItemStack, Integer> reserved = getConsumedItems(block);
-    for (Map.Entry<ItemStack, Integer> entry : groupSimilarItems(recipe.getInput()).entrySet()) {
+    for (Map.Entry<ItemStack, Integer> entry : getActiveRequiredItems(block, recipe.getInput()).entrySet()) {
       ItemStack ingredient = entry.getKey();
       int required = entry.getValue();
       int reservedAmount = countMapAmount(reserved, ingredient);
