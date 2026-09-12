@@ -62,6 +62,16 @@ for machine in \
   grep -q 'restoreStateIfNeeded' "$machine"
 done
 
+MOB_COLLECTOR="$JAVA/machine/MobCollector.java"
+grep -q 'IDLE_SCAN_BACKOFF_TICKS = 4L' "$MOB_COLLECTOR"
+grep -q 'getNearbyLivingEntities' "$MOB_COLLECTOR"
+grep -q 'hasMatchingEntity' "$MOB_COLLECTOR"
+grep -q 'nextIdleScan' "$MOB_COLLECTOR"
+if [[ "$(grep -c 'getNearbyEntities(' "$MOB_COLLECTOR")" -ne 1 ]]; then
+  echo "Mob Collector must use exactly one nearby-entity query implementation per selection pass." >&2
+  exit 1
+fi
+
 grep -q 'loadReservedOnly' "$JAVA/machine/tech/TechRobotic.java"
 grep -q 'loadReservedOnly' "$JAVA/machine/tech/TechMutation.java"
 grep -q 'saveAuxText' "$JAVA/machine/tech/TechMutation.java"
@@ -94,4 +104,4 @@ grep -q 'setMachineIdentifier(TechRobotic.TECH_ROBOTIC_III.getItemId())' "$SETUP
 
 grep -q 'SupremeMachineDiagnostics diagnostics' "$JAVA/command/SupremeCommand.java"
 
-echo "Supreme machine, transport, rollback, persistence, armor, and energy invariants verified."
+echo "Supreme machine, transport, mob scan, rollback, persistence, armor, and energy invariants verified."
