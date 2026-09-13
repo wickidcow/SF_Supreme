@@ -25,6 +25,10 @@ jobs:
         shell: bash
         run: bash scripts/verify-supreme-invariants.sh .
 
+      - name: Verify Slimefun Doctor migration invariants
+        shell: bash
+        run: bash scripts/verify-doctor-migration.sh .
+
       - name: Checkout Slimefun Legacy API
         uses: actions/checkout@v5
         with:
