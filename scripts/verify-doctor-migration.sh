@@ -4,11 +4,13 @@ set -euo pipefail
 ROOT="${1:-.}"
 JAVA="$ROOT/src/main/java/com/github/relativobr/supreme"
 MAPPINGS="$JAVA/diagnostics/SupremeLegacyIdMappings.java"
-SERVICE="$JAVA/diagnostics/SupremeLegacyMigrationService.java"
-BRIDGE="$JAVA/diagnostics/SupremeLegacyMigrationProviderBridge.java"
+BLOCK_SERVICE="$JAVA/diagnostics/SupremeLegacyMigrationService.java"
+ITEM_SERVICE="$JAVA/diagnostics/SupremeLegacyItemMigrationService.java"
+ITEM_BRIDGE="$JAVA/diagnostics/SupremeLegacyMigrationProviderBridge.java"
+BLOCK_BRIDGE="$JAVA/diagnostics/SupremeLegacyBlockMigrationProviderBridge.java"
 PLUGIN="$JAVA/Supreme.java"
 
-for file in "$MAPPINGS" "$SERVICE" "$BRIDGE"; do
+for file in "$MAPPINGS" "$BLOCK_SERVICE" "$ITEM_SERVICE" "$ITEM_BRIDGE" "$BLOCK_BRIDGE"; do
   test -f "$file"
 done
 
@@ -19,35 +21,47 @@ grep -q 'isUseLegacySupremeexpansionItemId()' "$MAPPINGS"
 grep -q 'SlimefunItem.getById(newId) == null' "$MAPPINGS"
 grep -q 'registerLegacySlimefunItemId' "$MAPPINGS"
 
-# Migration remains explicitly loaded-only. Never add force-loading to a repair provider.
-grep -q 'world.getLoadedChunks()' "$SERVICE"
-if grep -qE '\.loadChunk\(|\.getChunkAt\(|\.getChunkAtAsync\(' "$SERVICE"; then
+# Both lanes remain loaded-only. Never add force-loading to a migration provider.
+grep -q 'world.getLoadedChunks()' "$ITEM_SERVICE"
+grep -q 'isChunkLoaded' "$BLOCK_BRIDGE"
+if grep -qE '\.loadChunk\(|\.getChunkAt\(|\.getChunkAtAsync\(' "$ITEM_SERVICE" "$BLOCK_SERVICE" "$BLOCK_BRIDGE"; then
   echo "Supreme Doctor migration must never force-load chunks." >&2
   exit 1
 fi
 
 # Item identity migration must use Slimefun item data and retain nested-container coverage.
-grep -q 'getItemDataService' "$SERVICE"
-grep -q 'setItemData' "$SERVICE"
-grep -q 'meta instanceof BundleMeta' "$SERVICE"
-grep -q 'meta instanceof BlockStateMeta' "$SERVICE"
-grep -q 'MAX_NESTED_DEPTH = 4' "$SERVICE"
+grep -q 'getItemDataService' "$ITEM_SERVICE"
+grep -q 'setItemData' "$ITEM_SERVICE"
+grep -q 'meta instanceof BundleMeta' "$ITEM_SERVICE"
+grep -q 'meta instanceof BlockStateMeta' "$ITEM_SERVICE"
+grep -q 'MAX_NESTED_DEPTH = 4' "$ITEM_SERVICE"
 
 # Placed blocks must retain addon block data and menu contents, and rollback to the source record on failure.
-grep -q 'snapshotData(oldData)' "$SERVICE"
-grep -q 'snapshotMenu(oldData)' "$SERVICE"
-grep -q 'restoreBlockData(newData, oldValues, sourceId)' "$SERVICE"
-grep -q 'restoreMenuLosslessly(newData, menuContents)' "$SERVICE"
-grep -q 'Object restored = create.invoke(controller, location, sourceId)' "$SERVICE"
-grep -q 'supreme_legacy_migrated' "$SERVICE"
+grep -q 'snapshotData(oldData)' "$BLOCK_SERVICE"
+grep -q 'snapshotMenu(oldData)' "$BLOCK_SERVICE"
+grep -q 'restoreBlockData(newData, oldValues, sourceId)' "$BLOCK_SERVICE"
+grep -q 'restoreMenuLosslessly(newData, menuContents)' "$BLOCK_SERVICE"
+grep -q 'Object restored = create.invoke(controller, location, sourceId)' "$BLOCK_SERVICE"
+grep -q 'supreme_legacy_migrated' "$BLOCK_SERVICE"
 
-# The provider API must remain optional/reflection-only for Gugu/United compatibility.
-grep -q 'LegacyItemMigrationProvider' "$BRIDGE"
-grep -q 'Class.forName(PROVIDER_CLASS' "$BRIDGE"
-grep -q 'Proxy.newProxyInstance' "$BRIDGE"
-grep -q 'SupremeLegacyIdMappings.activeMappings()' "$BRIDGE"
-grep -q 'new SupremeLegacyMigrationService(plugin).scanLoaded(repair)' "$BRIDGE"
-grep -q 'unregisterAll(plugin)' "$BRIDGE"
+# Item migration remains an optional/reflection-only compatibility lane.
+grep -q 'LegacyItemMigrationProvider' "$ITEM_BRIDGE"
+grep -q 'Class.forName(PROVIDER_CLASS' "$ITEM_BRIDGE"
+grep -q 'Proxy.newProxyInstance' "$ITEM_BRIDGE"
+grep -q 'new SupremeLegacyItemMigrationService(plugin).scanLoaded(repair)' "$ITEM_BRIDGE"
+grep -q 'SupremeLegacyBlockMigrationProviderBridge.register(plugin)' "$ITEM_BRIDGE"
+grep -q 'SupremeLegacyBlockMigrationProviderBridge.unregister(plugin)' "$ITEM_BRIDGE"
+
+# Placed blocks use the exact location-bound, claim-backed migration API with immediate revalidation.
+grep -q 'LegacyBlockMigrationProvider' "$BLOCK_BRIDGE"
+grep -q 'LegacyBlockMigrationCandidate' "$BLOCK_BRIDGE"
+grep -q 'scanLoadedCandidates' "$BLOCK_BRIDGE"
+grep -q 'isCandidateStillValid' "$BLOCK_BRIDGE"
+grep -q 'stateClaim' "$BLOCK_BRIDGE"
+grep -q 'MessageDigest.getInstance("SHA-256")' "$BLOCK_BRIDGE"
+grep -q 'view.claim.equals(claim' "$BLOCK_BRIDGE"
+grep -q 'SupremeLegacyIdMappings.activeMappings().get(view.from)' "$BLOCK_BRIDGE"
+grep -q 'migrateBlock.invoke' "$BLOCK_BRIDGE"
 
 # Lifecycle order matters: items are registered before active targets are filtered/published.
 python3 - "$PLUGIN" <<'PY'
@@ -63,4 +77,4 @@ if "SupremeLegacyMigrationProviderBridge.unregister(this);" not in text:
     raise SystemExit("Supreme Doctor migration provider must unregister during plugin disable.")
 PY
 
-echo "Supreme Slimefun Doctor legacy-ID migration invariants verified."
+echo "Supreme Slimefun Doctor split item/block migration invariants verified."
