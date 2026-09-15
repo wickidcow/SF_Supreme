@@ -7,6 +7,8 @@ import static com.github.relativobr.supreme.util.CompatibilySupremeLegacy.loadGe
 import static com.github.relativobr.supreme.util.CompatibilySupremeLegacy.loadMachines;
 
 import com.github.relativobr.supreme.command.SupremeCommand;
+import com.github.relativobr.supreme.diagnostics.SupremeLegacyIdMappings;
+import com.github.relativobr.supreme.diagnostics.SupremeLegacyMigrationProviderBridge;
 import com.github.relativobr.supreme.setup.MainSetup;
 import com.github.relativobr.supreme.util.CompatibilySupremeLegacyItem;
 import com.github.relativobr.supreme.util.SupremeOptions;
@@ -189,6 +191,8 @@ public class Supreme extends JavaPlugin implements SlimefunAddon {
     }
 
     MainSetup.setup(this);
+    SupremeLegacyIdMappings.publish(this);
+    SupremeLegacyMigrationProviderBridge.register(this);
     registerSupremeCommand();
     logRecipeDoctor(SupremeRecipeDoctor.scan());
   }
@@ -218,6 +222,7 @@ public class Supreme extends JavaPlugin implements SlimefunAddon {
 
   @Override
   public void onDisable() {
+    SupremeLegacyMigrationProviderBridge.unregister(this);
     instance = null;
   }
 
