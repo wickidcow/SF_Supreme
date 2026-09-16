@@ -4,10 +4,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.github.wickidcow</groupId>
-    <artifactId>Supreme-Legacy</artifactId>
+    <artifactId>Supreme</artifactId>
     <version>1.0.12</version>
-    <name>Supreme-Legacy</name>
-    <description>Modernized Supreme addon for Slimefun Legacy, Gugu and United.</description>
+    <name>Supreme</name>
+    <description>Modernized Supreme addon for supported Slimefun runtimes.</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -20,112 +20,50 @@
     </properties>
 
     <repositories>
-        <repository>
-            <id>papermc</id>
-            <url>https://repo.papermc.io/repository/maven-public/</url>
-        </repository>
-        <repository>
-            <id>jitpack</id>
-            <url>https://jitpack.io</url>
-            <releases><enabled>true</enabled></releases>
-            <snapshots><enabled>false</enabled></snapshots>
-        </repository>
+        <repository><id>papermc</id><url>https://repo.papermc.io/repository/maven-public/</url></repository>
+        <repository><id>jitpack</id><url>https://jitpack.io</url><releases><enabled>true</enabled></releases><snapshots><enabled>false</enabled></snapshots></repository>
     </repositories>
 
     <dependencies>
-        <dependency>
-            <groupId>io.papermc.paper</groupId>
-            <artifactId>paper-api</artifactId>
-            <version>${paper.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>${slimefun.groupId}</groupId>
-            <artifactId>${slimefun.artifactId}</artifactId>
-            <version>${slimefun.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.google.code.findbugs</groupId>
-            <artifactId>jsr305</artifactId>
-            <version>3.0.2</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <version>${lombok.version}</version>
-            <scope>provided</scope>
-        </dependency>
+        <dependency><groupId>io.papermc.paper</groupId><artifactId>paper-api</artifactId><version>${paper.version}</version><scope>provided</scope></dependency>
+        <dependency><groupId>${slimefun.groupId}</groupId><artifactId>${slimefun.artifactId}</artifactId><version>${slimefun.version}</version><scope>provided</scope></dependency>
+        <dependency><groupId>com.google.code.findbugs</groupId><artifactId>jsr305</artifactId><version>3.0.2</version><scope>provided</scope></dependency>
+        <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>${lombok.version}</version><scope>provided</scope></dependency>
     </dependencies>
 
     <profiles>
         <profile>
             <id>legacy</id>
             <activation><activeByDefault>true</activeByDefault></activation>
-            <properties>
-                <slimefun.groupId>com.github.slimefun</slimefun.groupId>
-                <slimefun.artifactId>Slimefun</slimefun.artifactId>
-                <slimefun.version>Legacy-SNAPSHOT</slimefun.version>
-            </properties>
+            <properties><slimefun.groupId>com.github.slimefun</slimefun.groupId><slimefun.artifactId>Slimefun</slimefun.artifactId><slimefun.version>Legacy-SNAPSHOT</slimefun.version></properties>
         </profile>
         <profile>
             <id>gugu</id>
-            <properties>
-                <slimefun.groupId>com.github.SlimefunGuguProject</slimefun.groupId>
-                <slimefun.artifactId>Slimefun4</slimefun.artifactId>
-                <slimefun.version>2024.3.1</slimefun.version>
-            </properties>
+            <properties><slimefun.groupId>com.github.SlimefunGuguProject</slimefun.groupId><slimefun.artifactId>Slimefun4</slimefun.artifactId><slimefun.version>2024.3.1</slimefun.version></properties>
         </profile>
         <profile>
             <id>united</id>
-            <properties>
-                <slimefun.groupId>io.github.slimefun_united</slimefun.groupId>
-                <slimefun.artifactId>slimefun-united</slimefun.artifactId>
-                <slimefun.version>4.10-SNAPSHOT</slimefun.version>
-            </properties>
+            <properties><slimefun.groupId>io.github.slimefun_united</slimefun.groupId><slimefun.artifactId>slimefun-united</slimefun.artifactId><slimefun.version>4.10-SNAPSHOT</slimefun.version></properties>
         </profile>
     </profiles>
 
     <build>
         <finalName>SF_Supreme${project.version}</finalName>
         <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>true</filtering>
-            </resource>
-            <resource>
-                <directory>${project.basedir}</directory>
-                <includes><include>LICENSE</include></includes>
-            </resource>
+            <resource><directory>src/main/resources</directory><filtering>true</filtering></resource>
+            <resource><directory>${project.basedir}</directory><includes><include>LICENSE</include></includes></resource>
         </resources>
         <plugins>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.13.0</version>
+                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version>
                 <configuration>
-                    <release>${maven.compiler.release}</release>
-                    <encoding>${project.build.sourceEncoding}</encoding>
-                    <parameters>true</parameters>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                            <version>${lombok.version}</version>
-                        </path>
-                    </annotationProcessorPaths>
+                    <release>${maven.compiler.release}</release><encoding>${project.build.sourceEncoding}</encoding><parameters>true</parameters>
+                    <annotationProcessorPaths><path><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>${lombok.version}</version></path></annotationProcessorPaths>
                 </configuration>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.4.2</version>
-                <configuration>
-                    <archive>
-                        <manifestEntries><Built-For>Paper 1.21.11 / 26.x</Built-For></manifestEntries>
-                    </archive>
-                </configuration>
+                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><version>3.4.2</version>
+                <configuration><archive><manifestEntries><Built-For>Paper 1.21.11 / 26.x</Built-For></manifestEntries></archive></configuration>
             </plugin>
         </plugins>
     </build>
