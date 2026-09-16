@@ -5,7 +5,7 @@
 
     <groupId>com.github.wickidcow</groupId>
     <artifactId>Supreme-Legacy</artifactId>
-    <version>1.0.11</version>
+    <version>1.0.12</version>
     <name>Supreme-Legacy</name>
     <description>Modernized Supreme addon for Slimefun Legacy, Gugu and United.</description>
 
@@ -27,13 +27,8 @@
         <repository>
             <id>jitpack</id>
             <url>https://jitpack.io</url>
-            <!-- JitPack does not publish Supreme's locally built API snapshots. -->
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>false</enabled></snapshots>
         </repository>
     </repositories>
 
@@ -67,9 +62,7 @@
     <profiles>
         <profile>
             <id>legacy</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
+            <activation><activeByDefault>true</activeByDefault></activation>
             <properties>
                 <slimefun.groupId>com.github.slimefun</slimefun.groupId>
                 <slimefun.artifactId>Slimefun</slimefun.artifactId>
@@ -95,7 +88,7 @@
     </profiles>
 
     <build>
-        <finalName>Supreme-Legacy</finalName>
+        <finalName>SF_Supreme${project.version}</finalName>
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
@@ -103,9 +96,7 @@
             </resource>
             <resource>
                 <directory>${project.basedir}</directory>
-                <includes>
-                    <include>LICENSE</include>
-                </includes>
+                <includes><include>LICENSE</include></includes>
             </resource>
         </resources>
         <plugins>
@@ -132,9 +123,7 @@
                 <version>3.4.2</version>
                 <configuration>
                     <archive>
-                        <manifestEntries>
-                            <Built-For>Paper 1.21.11 / 26.x</Built-For>
-                        </manifestEntries>
+                        <manifestEntries><Built-For>Paper 1.21.11 / 26.x</Built-For></manifestEntries>
                     </archive>
                 </configuration>
             </plugin>
