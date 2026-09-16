@@ -11,8 +11,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.11"
-  OUTPUT_NAME: "SF_Supreme1.0.11.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.12"
+  OUTPUT_NAME: "SF_Supreme1.0.12.jar"
 
 jobs:
   build-legacy:
@@ -64,13 +64,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp target/Supreme-Legacy.jar "dist/${OUTPUT_NAME}"
-          test -s "dist/${OUTPUT_NAME}"
+          JAR="target/${OUTPUT_NAME}"
+          test -s "$JAR"
+          cp "$JAR" "dist/${OUTPUT_NAME}"
           sha256sum "dist/${OUTPUT_NAME}"
 
       - name: Upload raw JAR artifact
         uses: actions/upload-artifact@v7
         with:
+          name: ${{ env.OUTPUT_NAME }}
           path: dist/${{ env.OUTPUT_NAME }}
           archive: false
           if-no-files-found: error
@@ -84,7 +86,7 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${LEGACY_ARTIFACT_VERSION}"; fi
           JAR="dist/${OUTPUT_NAME}"
-          NOTES="Supreme Legacy 1.0.11 hardens GenericMachine live runtime state for Slimefun's asynchronous AContainer ticker. Per-block processing, progress, staged-input, retry, backoff, checkpoint, and active-requirement maps now use concurrency-safe storage where they can be observed by machine ticks, transport, diagnostics, or block-break recovery from different server execution paths. Mutable reserved-input maps are also concurrency-safe. Machine processing remains asynchronous; no main-thread scheduler hop or coarse inventory lock was added. Recipes, item IDs, output quantities, processing speeds, energy costs, persistence format, rollback rules, staged Networks/Cargo behavior, and progression are unchanged. CI continues to compile against Paper 26.2, Paper 26.3, rolling-latest Paper, Slimefun Legacy, Gugu, and United."
+          NOTES="Supreme Legacy 1.0.12 is the 26.3 compatibility release. It keeps Paper/Purpur 26.2 as the primary production target, preserves 1.21.11 and 26.1.x compatibility where supported, and continues the 26.3/rolling Paper compile lane. The Maven build now produces the public SF_Supreme1.0.12.jar filename directly instead of relying on CI renaming."
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; leaving its tag and asset unchanged."
             exit 0
