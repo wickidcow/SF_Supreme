@@ -2,7 +2,6 @@ package com.github.relativobr.supreme.machine.recipe;
 
 import com.github.relativobr.supreme.Supreme;
 import com.github.relativobr.supreme.generic.recipe.AbstractItemRecipe;
-import com.github.relativobr.supreme.util.SupremeOptions;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -136,6 +135,7 @@ public class VirtualGardenMachineRecipe extends MachineRecipe {
     list.add(RECIPE_GARDEN_SPRUCE_SAPLING);
     list.add(RECIPE_GARDEN_ACACIA_SAPLING);
     list.add(RECIPE_GARDEN_OAK_SAPLING);
+    addRuntimeVanillaTreeRecipes(list);
     list.add(RECIPE_GARDEN_CRIMSON_FUNGUS);
     list.add(RECIPE_GARDEN_WARPED_FUNGUS);
     list.add(RECIPE_GARDEN_WITHER_ROSE);
@@ -150,4 +150,38 @@ public class VirtualGardenMachineRecipe extends MachineRecipe {
     return list;
   }
 
+  private static void addRuntimeVanillaTreeRecipes(List<AbstractItemRecipe> recipes) {
+    for (Material input : Material.values()) {
+      String family = getVanillaTreeFamily(input);
+      if (family == null || containsInput(recipes, input)) {
+        continue;
+      }
+
+      Material log = Material.getMaterial(family + "_LOG");
+      Material leaves = Material.getMaterial(family + "_LEAVES");
+      if (log != null && leaves != null) {
+        recipes.add(new AbstractItemRecipe(input, null, log, leaves));
+      }
+    }
+  }
+
+  private static String getVanillaTreeFamily(Material input) {
+    String name = input.name();
+    if (name.endsWith("_SAPLING")) {
+      return name.substring(0, name.length() - "_SAPLING".length());
+    }
+    if ("MANGROVE_PROPAGULE".equals(name)) {
+      return "MANGROVE";
+    }
+    return null;
+  }
+
+  private static boolean containsInput(List<AbstractItemRecipe> recipes, Material material) {
+    for (AbstractItemRecipe recipe : recipes) {
+      if (recipe != null && recipe.getFirstMaterialInput() == material) {
+        return true;
+      }
+    }
+    return false;
+  }
 }
