@@ -5,7 +5,7 @@
 
     <groupId>com.github.wickidcow</groupId>
     <artifactId>Supreme</artifactId>
-    <version>1.0.12</version>
+    <version>1.0.13</version>
     <name>Supreme</name>
     <description>Modernized Supreme addon for supported Slimefun runtimes.</description>
 
