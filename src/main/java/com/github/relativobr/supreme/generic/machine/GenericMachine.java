@@ -82,6 +82,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     private final AbstractItemRecipe recipe;
     private final ItemStack[] input;
     private final Map<ItemStack, Integer> requiredItems;
+    private Set<Material> requiredMaterials = Set.of();
     private Material anchorMaterial;
 
     private RecipeCache(AbstractItemRecipe recipe, ItemStack[] input,
@@ -429,6 +430,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
           recipeMaterialFrequency.merge(type, 1, Integer::sum);
         }
       }
+      cache.requiredMaterials = Set.copyOf(indexedMaterials);
     }
 
     /*
@@ -581,12 +583,12 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
     /*
      * A machine such as the Electric Magical Fabricator has many recipes but usually only a few
-     * distinct materials in its input inventory. Every recipe receives a rare anchor material when
-     * caches are built. Snapshot the visible material types once, then skip recipes whose anchor is
-     * absent before doing the comparatively expensive Slimefun item-similarity checks.
+     * distinct materials in its input inventory. Every recipe caches its required Material signature
+     * plus a rare anchor Material. Snapshot the visible material types once, then skip impossible
+     * recipes before doing the comparatively expensive Slimefun item-similarity checks.
      *
-     * Recipe-cache order is still authoritative, so overlapping/custom-item recipes keep exactly the
-     * same selection precedence as before.
+     * This is only a coarse prefilter: exact Slimefun/custom-item matching still decides the recipe.
+     * Recipe-cache order stays authoritative, so overlapping recipes keep the same precedence.
      */
     Set<Material> visibleMaterials = new HashSet<>();
     for (int slot : getInputSlots()) {
@@ -598,7 +600,9 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
     for (RecipeCache recipe : recipeCaches) {
       if (!recipe.requiredItems.isEmpty()
-          && (recipe.anchorMaterial == null || !visibleMaterials.contains(recipe.anchorMaterial))) {
+          && (recipe.anchorMaterial == null
+              || !visibleMaterials.contains(recipe.anchorMaterial)
+              || !visibleMaterials.containsAll(recipe.requiredMaterials))) {
         continue;
       }
       if (matchingRecipe(recipe.requiredItems, inv)) {
