@@ -73,7 +73,6 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private final Map<Block, Map<ItemStack, Integer>> activeRequiredItems = new ConcurrentHashMap<>();
   private final List<RecipeCache> recipeCaches = new ArrayList<>();
   private final Map<Material, List<RecipeCache>> transportRecipeIndex = new HashMap<>();
-  private final Map<Material, List<RecipeCache>> recipeAnchorIndex = new HashMap<>();
   public final List<AbstractItemRecipe> machineRecipes = new ArrayList<>();
   private Integer timeProcess;
   private String machineIdentifier = "MediumContainerMachine";
@@ -413,7 +412,6 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private void rebuildRecipeCaches() {
     recipeCaches.clear();
     transportRecipeIndex.clear();
-    recipeAnchorIndex.clear();
 
     Map<Material, Integer> recipeMaterialFrequency = new HashMap<>();
 
@@ -451,9 +449,6 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       }
 
       cache.anchorMaterial = anchor;
-      if (anchor != null) {
-        recipeAnchorIndex.computeIfAbsent(anchor, ignored -> new ArrayList<>()).add(cache);
-      }
     }
   }
 
