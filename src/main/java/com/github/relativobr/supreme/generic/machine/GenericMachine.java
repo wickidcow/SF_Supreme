@@ -73,6 +73,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private final Map<Block, Map<ItemStack, Integer>> activeRequiredItems = new ConcurrentHashMap<>();
   private final List<RecipeCache> recipeCaches = new ArrayList<>();
   private final Map<Material, List<RecipeCache>> transportRecipeIndex = new HashMap<>();
+  private final Map<Material, List<RecipeCache>> recipeAnchorIndex = new HashMap<>();
   public final List<AbstractItemRecipe> machineRecipes = new ArrayList<>();
   private Integer timeProcess;
   private String machineIdentifier = "MediumContainerMachine";
@@ -82,6 +83,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     private final AbstractItemRecipe recipe;
     private final ItemStack[] input;
     private final Map<ItemStack, Integer> requiredItems;
+    private Material anchorMaterial;
 
     private RecipeCache(AbstractItemRecipe recipe, ItemStack[] input,
         Map<ItemStack, Integer> requiredItems) {
@@ -411,6 +413,9 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private void rebuildRecipeCaches() {
     recipeCaches.clear();
     transportRecipeIndex.clear();
+    recipeAnchorIndex.clear();
+
+    Map<Material, Integer> recipeMaterialFrequency = new HashMap<>();
 
     for (AbstractItemRecipe recipe : machineRecipes) {
       ItemStack[] input = recipe.getInputNotNull();
@@ -423,7 +428,31 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         Material type = required.getType();
         if (indexedMaterials.add(type)) {
           transportRecipeIndex.computeIfAbsent(type, ignored -> new ArrayList<>()).add(cache);
+          recipeMaterialFrequency.merge(type, 1, Integer::sum);
         }
+      }
+    }
+
+    /*
+     * Pick the least-common required Material as the recipe's cheap prefilter. A material that only
+     * appears in one recipe is especially effective for the Magical/Core fabricators, while recipes
+     * sharing common vanilla ingredients still fall through to the exact item matcher.
+     */
+    for (RecipeCache cache : recipeCaches) {
+      Material anchor = null;
+      int bestFrequency = Integer.MAX_VALUE;
+      for (ItemStack required : cache.requiredItems.keySet()) {
+        Material type = required.getType();
+        int frequency = recipeMaterialFrequency.getOrDefault(type, Integer.MAX_VALUE);
+        if (frequency < bestFrequency) {
+          anchor = type;
+          bestFrequency = frequency;
+        }
+      }
+
+      cache.anchorMaterial = anchor;
+      if (anchor != null) {
+        recipeAnchorIndex.computeIfAbsent(anchor, ignored -> new ArrayList<>()).add(cache);
       }
     }
   }
@@ -551,7 +580,32 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
   @Override
   protected MachineRecipe findNextRecipe(BlockMenu inv) {
+    if (recipeCaches.isEmpty()) {
+      return null;
+    }
+
+    /*
+     * A machine such as the Electric Magical Fabricator has many recipes but usually only a few
+     * distinct materials in its input inventory. Every recipe receives a rare anchor material when
+     * caches are built. Snapshot the visible material types once, then skip recipes whose anchor is
+     * absent before doing the comparatively expensive Slimefun item-similarity checks.
+     *
+     * Recipe-cache order is still authoritative, so overlapping/custom-item recipes keep exactly the
+     * same selection precedence as before.
+     */
+    Set<Material> visibleMaterials = new HashSet<>();
+    for (int slot : getInputSlots()) {
+      ItemStack item = inv.getItemInSlot(slot);
+      if (item != null && !item.getType().isAir()) {
+        visibleMaterials.add(item.getType());
+      }
+    }
+
     for (RecipeCache recipe : recipeCaches) {
+      if (!recipe.requiredItems.isEmpty()
+          && (recipe.anchorMaterial == null || !visibleMaterials.contains(recipe.anchorMaterial))) {
+        continue;
+      }
       if (matchingRecipe(recipe.requiredItems, inv)) {
         return new MachineRecipe(getTimeProcess(), recipe.input, recipe.recipe.getOutputNotNull());
       }
