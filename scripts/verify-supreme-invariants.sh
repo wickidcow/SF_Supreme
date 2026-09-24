@@ -62,6 +62,9 @@ grep -q 'transportRecipeIndex' "$GENERIC"
 grep -q 'rebuildRecipeCaches' "$GENERIC"
 grep -q 'activeRequiredItems' "$GENERIC"
 grep -q 'transportRecipeIndex.get(incoming.getType())' "$GENERIC"
+grep -q 'anchorMaterial' "$GENERIC"
+grep -q 'recipeMaterialFrequency' "$GENERIC"
+grep -q 'visibleMaterials.contains(recipe.anchorMaterial)' "$GENERIC"
 grep -q 'if (stagedThisTick == 0)' "$GENERIC"
 if grep -q 'java.util.Comparator\|java.util.LinkedList' "$GENERIC"; then
   echo "GenericMachine transport routing must not allocate/sort a temporary partial-slot list." >&2
