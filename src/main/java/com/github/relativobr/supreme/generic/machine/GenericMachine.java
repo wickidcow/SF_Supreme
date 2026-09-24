@@ -82,6 +82,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     private final AbstractItemRecipe recipe;
     private final ItemStack[] input;
     private final Map<ItemStack, Integer> requiredItems;
+    private Set<Material> requiredMaterials = Set.of();
+    private Material anchorMaterial;
 
     private RecipeCache(AbstractItemRecipe recipe, ItemStack[] input,
         Map<ItemStack, Integer> requiredItems) {
@@ -412,6 +414,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     recipeCaches.clear();
     transportRecipeIndex.clear();
 
+    Map<Material, Integer> recipeMaterialFrequency = new HashMap<>();
+
     for (AbstractItemRecipe recipe : machineRecipes) {
       ItemStack[] input = recipe.getInputNotNull();
       Map<ItemStack, Integer> requiredItems = groupSimilarItems(input);
@@ -423,8 +427,30 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
         Material type = required.getType();
         if (indexedMaterials.add(type)) {
           transportRecipeIndex.computeIfAbsent(type, ignored -> new ArrayList<>()).add(cache);
+          recipeMaterialFrequency.merge(type, 1, Integer::sum);
         }
       }
+      cache.requiredMaterials = Set.copyOf(indexedMaterials);
+    }
+
+    /*
+     * Pick the least-common required Material as the recipe's cheap prefilter. A material that only
+     * appears in one recipe is especially effective for the Magical/Core fabricators, while recipes
+     * sharing common vanilla ingredients still fall through to the exact item matcher.
+     */
+    for (RecipeCache cache : recipeCaches) {
+      Material anchor = null;
+      int bestFrequency = Integer.MAX_VALUE;
+      for (ItemStack required : cache.requiredItems.keySet()) {
+        Material type = required.getType();
+        int frequency = recipeMaterialFrequency.getOrDefault(type, Integer.MAX_VALUE);
+        if (frequency < bestFrequency) {
+          anchor = type;
+          bestFrequency = frequency;
+        }
+      }
+
+      cache.anchorMaterial = anchor;
     }
   }
 
@@ -551,7 +577,34 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
   @Override
   protected MachineRecipe findNextRecipe(BlockMenu inv) {
+    if (recipeCaches.isEmpty()) {
+      return null;
+    }
+
+    /*
+     * A machine such as the Electric Magical Fabricator has many recipes but usually only a few
+     * distinct materials in its input inventory. Every recipe caches its required Material signature
+     * plus a rare anchor Material. Snapshot the visible material types once, then skip impossible
+     * recipes before doing the comparatively expensive Slimefun item-similarity checks.
+     *
+     * This is only a coarse prefilter: exact Slimefun/custom-item matching still decides the recipe.
+     * Recipe-cache order stays authoritative, so overlapping recipes keep the same precedence.
+     */
+    Set<Material> visibleMaterials = new HashSet<>();
+    for (int slot : getInputSlots()) {
+      ItemStack item = inv.getItemInSlot(slot);
+      if (item != null && !item.getType().isAir()) {
+        visibleMaterials.add(item.getType());
+      }
+    }
+
     for (RecipeCache recipe : recipeCaches) {
+      if (!recipe.requiredItems.isEmpty()
+          && (recipe.anchorMaterial == null
+              || !visibleMaterials.contains(recipe.anchorMaterial)
+              || !visibleMaterials.containsAll(recipe.requiredMaterials))) {
+        continue;
+      }
       if (matchingRecipe(recipe.requiredItems, inv)) {
         return new MachineRecipe(getTimeProcess(), recipe.input, recipe.recipe.getOutputNotNull());
       }
