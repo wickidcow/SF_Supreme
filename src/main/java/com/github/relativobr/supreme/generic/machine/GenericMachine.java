@@ -60,6 +60,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
   private static final int MAX_STAGED_BATCH = 64;
   private static final long IDLE_BACKOFF_TICKS = 4L;
+  private static final long IDLE_RECIPE_REVALIDATE_TICKS = 200L;
   private static final int PROGRESS_CHECKPOINT_INTERVAL = 20;
 
   // AContainer ticks asynchronously on Paper/Purpur, while transport and block-break paths may
@@ -69,6 +70,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private final Map<Block, Map<ItemStack, Integer>> consumedItemsMap = new ConcurrentHashMap<>();
   private final Map<Block, Integer> attemptCount = new ConcurrentHashMap<>();
   private final Map<Block, Long> heavyCheckAfter = new ConcurrentHashMap<>();
+  private final Map<Block, Integer> idleInputFingerprint = new ConcurrentHashMap<>();
+  private final Map<Block, Long> idleRecipeRecheckAfter = new ConcurrentHashMap<>();
   private final Map<Block, Integer> lastProgressCheckpoint = new ConcurrentHashMap<>();
   private final Map<Block, Map<ItemStack, Integer>> activeRequiredItems = new ConcurrentHashMap<>();
   private final List<RecipeCache> recipeCaches = new ArrayList<>();
@@ -560,7 +563,27 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     if (isProcessing(b)) {
       doProcessing(b, inv);
     } else {
+      /*
+       * Recipe matching is one of Supreme's most expensive idle paths, especially on Magical/Core
+       * fabricators with large recipe sets. The visible input inventory is the only state that can
+       * turn "no recipe" into a recipe, so avoid rebuilding material sets and scanning recipe caches
+       * while those slots are unchanged. A changed fingerprint wakes the machine on its very next
+       * ticker pass; the periodic full check protects against hash collisions and unusual external
+       * inventory mutation without adding a fixed recipe-start delay.
+       */
+      int fingerprint = SupremeInventoryUtils.fingerprint(inv, getInputSlots());
+      if (gameTime < idleRecipeRecheckAfter.getOrDefault(b, 0L)
+          && fingerprint == idleInputFingerprint.getOrDefault(b, Integer.MIN_VALUE)) {
+        return;
+      }
+
       nextProcessing(b, inv);
+      if (isProcessing(b)) {
+        clearIdleRecipeBackoff(b);
+      } else {
+        idleInputFingerprint.put(b, fingerprint);
+        idleRecipeRecheckAfter.put(b, gameTime + IDLE_RECIPE_REVALIDATE_TICKS);
+      }
     }
   }
 
@@ -659,6 +682,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     attemptCount.remove(b);
     consumedItemsMap.remove(b);
     heavyCheckAfter.remove(b);
+    clearIdleRecipeBackoff(b);
     lastProgressCheckpoint.remove(b);
     activeRequiredItems.remove(b);
     SupremeMachineStateCodec.clear(b);
@@ -1185,6 +1209,11 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
   private void backoff(Block b) {
     heavyCheckAfter.put(b, b.getWorld().getGameTime() + IDLE_BACKOFF_TICKS);
+  }
+
+  private void clearIdleRecipeBackoff(Block b) {
+    idleInputFingerprint.remove(b);
+    idleRecipeRecheckAfter.remove(b);
   }
 
   /**
