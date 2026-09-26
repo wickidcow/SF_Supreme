@@ -54,8 +54,10 @@ grep -q 'volatile int lastCheckpoint' "$GENERIC"
 grep -q 'Map<Block, Map<ItemStack, Integer>> consumedItemsMap = new ConcurrentHashMap<>()' "$GENERIC"
 grep -q 'Map<Block, Integer> attemptCount = new ConcurrentHashMap<>()' "$GENERIC"
 grep -q 'Map<Block, Long> heavyCheckAfter = new ConcurrentHashMap<>()' "$GENERIC"
-grep -q 'Map<Block, Integer> idleInputFingerprint = new ConcurrentHashMap<>()' "$GENERIC"
-grep -q 'Map<Block, Long> idleRecipeRecheckAfter = new ConcurrentHashMap<>()' "$GENERIC"
+grep -q 'Map<Block, IdleRecipeState> idleRecipeState = new ConcurrentHashMap<>()' "$GENERIC"
+grep -q 'private static final class IdleRecipeState' "$GENERIC"
+grep -q 'volatile int fingerprint' "$GENERIC"
+grep -q 'volatile long recheckAfter' "$GENERIC"
 grep -q 'Map<Block, Map<ItemStack, Integer>> activeRequiredItems = new ConcurrentHashMap<>()' "$GENERIC"
 grep -q 'consumedItemsMap.computeIfAbsent(b, ignored -> new ConcurrentHashMap<>())' "$GENERIC"
 grep -q 'consumedItemsMap.put(b, new ConcurrentHashMap<>())' "$GENERIC"
@@ -66,6 +68,13 @@ grep -q 'transportRecipeIndex' "$GENERIC"
 grep -q 'rebuildRecipeCaches' "$GENERIC"
 grep -q 'activeRequiredItems' "$GENERIC"
 grep -q 'transportRecipeIndex.get(incoming.getType())' "$GENERIC"
+grep -q 'private final ItemStack\[] requiredTemplates' "$GENERIC"
+grep -q 'private final int\[] requiredAmounts' "$GENERIC"
+grep -q 'selectedRecipe.requiredTemplates' "$GENERIC"
+grep -q 'selectedRecipe.requiredAmounts' "$GENERIC"
+grep -q 'containsSimilar(ItemStack\[] items, ItemStack target)' "$GENERIC"
+grep -q 'containsInputItem(DirtyChestMenu menu, int\[] inputSlots, ItemStack required)' "$GENERIC"
+grep -q 'matchingRecipe(recipe.requiredTemplates, inv)' "$GENERIC"
 grep -q 'anchorMaterial' "$GENERIC"
 grep -q 'requiredMaterials' "$GENERIC"
 grep -q 'recipeMaterialFrequency' "$GENERIC"
@@ -73,9 +82,11 @@ grep -q 'visibleMaterials.contains(recipe.anchorMaterial)' "$GENERIC"
 grep -q 'visibleMaterials.containsAll(recipe.requiredMaterials)' "$GENERIC"
 grep -q 'IDLE_RECIPE_REVALIDATE_TICKS = 200L' "$GENERIC"
 grep -q 'SupremeInventoryUtils.fingerprint(inv, getInputSlots())' "$GENERIC"
-grep -q 'fingerprint == idleInputFingerprint.getOrDefault' "$GENERIC"
-grep -q 'idleRecipeRecheckAfter.put(b, gameTime + IDLE_RECIPE_REVALIDATE_TICKS)' "$GENERIC"
+grep -q 'fingerprint == idleState.fingerprint' "$GENERIC"
+grep -q 'idleState.recheckAfter = gameTime + IDLE_RECIPE_REVALIDATE_TICKS' "$GENERIC"
+grep -q 'heavyCheckAfter.put(b, gameTime + IDLE_BACKOFF_TICKS)' "$GENERIC"
 grep -q 'clearIdleRecipeBackoff' "$GENERIC"
+grep -q 'idleRecipeState.remove(b)' "$GENERIC"
 grep -q 'if (stagedThisTick == 0)' "$GENERIC"
 grep -q 'consumedItems.getOrDefault(requiredItem, 0)' "$GENERIC"
 grep -q 'consumedItems.merge(requiredItem, amountToConsume, Integer::sum)' "$GENERIC"
@@ -83,6 +94,15 @@ grep -q 'canonicalizeConsumedItems' "$GENERIC"
 grep -q 'final Location location = inv.getLocation();' "$GENERIC"
 grep -q 'progress.remaining = nextProgress' "$GENERIC"
 grep -q 'progress.lastCheckpoint = nextProgress' "$GENERIC"
+if grep -q 'idleInputFingerprint\|idleRecipeRecheckAfter' "$GENERIC"; then
+  echo "GenericMachine idle recipe state must not use separate boxed fingerprint/deadline maps." >&2
+  exit 1
+fi
+if grep -q 'containsSimilar(Map<ItemStack, Integer>' "$GENERIC"; then
+  echo "GenericMachine transport recipe matching must use precomputed template arrays." >&2
+  exit 1
+fi
+
 if grep -q 'java.util.Comparator\|java.util.LinkedList' "$GENERIC"; then
   echo "GenericMachine transport routing must not allocate/sort a temporary partial-slot list." >&2
   exit 1

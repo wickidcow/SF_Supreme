@@ -74,8 +74,12 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private final Map<Block, Map<ItemStack, Integer>> consumedItemsMap = new ConcurrentHashMap<>();
   private final Map<Block, Integer> attemptCount = new ConcurrentHashMap<>();
   private final Map<Block, Long> heavyCheckAfter = new ConcurrentHashMap<>();
-  private final Map<Block, Integer> idleInputFingerprint = new ConcurrentHashMap<>();
-  private final Map<Block, Long> idleRecipeRecheckAfter = new ConcurrentHashMap<>();
+  /*
+   * Keep the idle fingerprint and periodic full-recheck deadline in one mutable state object.
+   * This avoids two ConcurrentHashMap lookups plus boxed Integer/Long replacement on every idle
+   * recipe miss while preserving the exact 200-tick collision-safety revalidation.
+   */
+  private final Map<Block, IdleRecipeState> idleRecipeState = new ConcurrentHashMap<>();
   private final Map<Block, Map<ItemStack, Integer>> activeRequiredItems = new ConcurrentHashMap<>();
   private final List<RecipeCache> recipeCaches = new ArrayList<>();
   private final Map<Material, List<RecipeCache>> transportRecipeIndex = new HashMap<>();
@@ -93,11 +97,23 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     }
   }
 
+  private static final class IdleRecipeState {
+    private volatile int fingerprint;
+    private volatile long recheckAfter;
+
+    private IdleRecipeState(int fingerprint, long recheckAfter) {
+      this.fingerprint = fingerprint;
+      this.recheckAfter = recheckAfter;
+    }
+  }
+
   private static final class RecipeCache {
 
     private final AbstractItemRecipe recipe;
     private final ItemStack[] input;
     private final Map<ItemStack, Integer> requiredItems;
+    private final ItemStack[] requiredTemplates;
+    private final int[] requiredAmounts;
     private Set<Material> requiredMaterials = Set.of();
     private Material anchorMaterial;
 
@@ -106,6 +122,15 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       this.recipe = recipe;
       this.input = input;
       this.requiredItems = requiredItems;
+      this.requiredTemplates = new ItemStack[requiredItems.size()];
+      this.requiredAmounts = new int[requiredItems.size()];
+
+      int index = 0;
+      for (Map.Entry<ItemStack, Integer> entry : requiredItems.entrySet()) {
+        this.requiredTemplates[index] = entry.getKey();
+        this.requiredAmounts[index] = entry.getValue();
+        index++;
+      }
     }
   }
 
@@ -162,7 +187,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return getInputSlots();
     }
 
-    Map<ItemStack, Integer> requiredItems = null;
+    Map<ItemStack, Integer> activeRequired = null;
     Map<ItemStack, Integer> reservedItems = Map.of();
 
     if (menu instanceof BlockMenu blockMenu) {
@@ -177,26 +202,35 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
           // empty slot response back to the machine's normal inputs.
           return new int[]{getStatusSlot()};
         }
-        requiredItems = getActiveRequiredItems(block, activeRecipe.getInput());
+        activeRequired = getActiveRequiredItems(block, activeRecipe.getInput());
         reservedItems = getConsumedItems(block);
       }
     }
 
-    if (requiredItems == null) {
+    ItemStack requiredTemplate = null;
+    int requiredAmount = 0;
+
+    if (activeRequired != null) {
+      for (Map.Entry<ItemStack, Integer> entry : activeRequired.entrySet()) {
+        if (SlimefunUtils.isItemSimilar(entry.getKey(), item, false, false)) {
+          requiredTemplate = entry.getKey();
+          requiredAmount = entry.getValue();
+          break;
+        }
+      }
+    } else {
       RecipeCache selectedRecipe = findTransportRecipe(menu, item);
       if (selectedRecipe == null) {
         return new int[0];
       }
-      requiredItems = selectedRecipe.requiredItems;
-    }
 
-    ItemStack requiredTemplate = null;
-    int requiredAmount = 0;
-    for (Map.Entry<ItemStack, Integer> entry : requiredItems.entrySet()) {
-      if (SlimefunUtils.isItemSimilar(entry.getKey(), item, false, false)) {
-        requiredTemplate = entry.getKey();
-        requiredAmount = entry.getValue();
-        break;
+      for (int i = 0; i < selectedRecipe.requiredTemplates.length; i++) {
+        ItemStack candidate = selectedRecipe.requiredTemplates[i];
+        if (SlimefunUtils.isItemSimilar(candidate, item, false, false)) {
+          requiredTemplate = candidate;
+          requiredAmount = selectedRecipe.requiredAmounts[i];
+          break;
+        }
       }
     }
 
@@ -219,7 +253,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     int fullMatchingSlot = -1;
     int firstEmptySlot = -1;
 
-    for (int slot : getInputSlots()) {
+    final int[] inputSlots = getInputSlots();
+    for (int slot : inputSlots) {
       ItemStack stack = menu.getItemInSlot(slot);
       if (stack == null || stack.getType().isAir()) {
         if (firstEmptySlot < 0) {
@@ -256,7 +291,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   }
 
   private int findFullMatchingInputSlot(DirtyChestMenu menu, ItemStack requiredTemplate) {
-    for (int slot : getInputSlots()) {
+    final int[] inputSlots = getInputSlots();
+    for (int slot : inputSlots) {
       ItemStack stack = menu.getItemInSlot(slot);
       if (stack != null
           && !stack.getType().isAir()
@@ -279,22 +315,23 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return null;
     }
 
+    final int[] inputSlots = getInputSlots();
     RecipeCache bestRecipe = null;
     int bestMatchedIngredients = -1;
 
     for (RecipeCache recipe : candidates) {
-      Map<ItemStack, Integer> requiredItems = recipe.requiredItems;
-      if (!containsSimilar(requiredItems, incoming)) {
+      ItemStack[] requiredTemplates = recipe.requiredTemplates;
+      if (!containsSimilar(requiredTemplates, incoming)) {
         continue;
       }
 
       boolean compatible = true;
-      for (int slot : getInputSlots()) {
+      for (int slot : inputSlots) {
         ItemStack existing = menu.getItemInSlot(slot);
         if (existing == null || existing.getType().isAir()) {
           continue;
         }
-        if (!containsSimilar(requiredItems, existing)) {
+        if (!containsSimilar(requiredTemplates, existing)) {
           compatible = false;
           break;
         }
@@ -304,8 +341,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       }
 
       int matchedIngredients = 0;
-      for (ItemStack required : requiredItems.keySet()) {
-        if (containsInputItem(menu, required)) {
+      for (ItemStack required : requiredTemplates) {
+        if (containsInputItem(menu, inputSlots, required)) {
           matchedIngredients++;
         }
       }
@@ -319,8 +356,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     return bestRecipe;
   }
 
-  private boolean containsSimilar(Map<ItemStack, Integer> items, ItemStack target) {
-    for (ItemStack candidate : items.keySet()) {
+  private boolean containsSimilar(ItemStack[] items, ItemStack target) {
+    for (ItemStack candidate : items) {
       if (SlimefunUtils.isItemSimilar(candidate, target, false, false)) {
         return true;
       }
@@ -328,8 +365,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     return false;
   }
 
-  private boolean containsInputItem(DirtyChestMenu menu, ItemStack required) {
-    for (int slot : getInputSlots()) {
+  private boolean containsInputItem(DirtyChestMenu menu, int[] inputSlots, ItemStack required) {
+    for (int slot : inputSlots) {
       ItemStack existing = menu.getItemInSlot(slot);
       if (existing != null && !existing.getType().isAir()
           && SlimefunUtils.isItemSimilar(existing, required, false, false)) {
@@ -585,8 +622,17 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
        * inventory mutation without adding a fixed recipe-start delay.
        */
       int fingerprint = SupremeInventoryUtils.fingerprint(inv, getInputSlots());
-      if (gameTime < idleRecipeRecheckAfter.getOrDefault(b, 0L)
-          && fingerprint == idleInputFingerprint.getOrDefault(b, Integer.MIN_VALUE)) {
+      IdleRecipeState idleState = idleRecipeState.get(b);
+      if (idleState != null
+          && gameTime < idleState.recheckAfter
+          && fingerprint == idleState.fingerprint) {
+        /*
+         * An unchanged idle inventory cannot start a recipe. Poll at the same four-tick cadence
+         * already used by the existing idle backoff instead of hashing every ItemStack every tick.
+         * This preserves the established worst-case wake latency while cutting idle fingerprint
+         * work by roughly 75% on long-lived idle machines.
+         */
+        heavyCheckAfter.put(b, gameTime + IDLE_BACKOFF_TICKS);
         return;
       }
 
@@ -594,8 +640,14 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       if (isProcessing(b)) {
         clearIdleRecipeBackoff(b);
       } else {
-        idleInputFingerprint.put(b, fingerprint);
-        idleRecipeRecheckAfter.put(b, gameTime + IDLE_RECIPE_REVALIDATE_TICKS);
+        if (idleState == null) {
+          IdleRecipeState created = new IdleRecipeState(
+              fingerprint, gameTime + IDLE_RECIPE_REVALIDATE_TICKS);
+          IdleRecipeState raced = idleRecipeState.putIfAbsent(b, created);
+          idleState = raced == null ? created : raced;
+        }
+        idleState.fingerprint = fingerprint;
+        idleState.recheckAfter = gameTime + IDLE_RECIPE_REVALIDATE_TICKS;
       }
     }
   }
@@ -635,13 +687,13 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     }
 
     for (RecipeCache recipe : recipeCaches) {
-      if (!recipe.requiredItems.isEmpty()
+      if (recipe.requiredTemplates.length > 0
           && (recipe.anchorMaterial == null
               || !visibleMaterials.contains(recipe.anchorMaterial)
               || !visibleMaterials.containsAll(recipe.requiredMaterials))) {
         continue;
       }
-      if (matchingRecipe(recipe.requiredItems, inv)) {
+      if (matchingRecipe(recipe.requiredTemplates, inv)) {
         return new MachineRecipe(getTimeProcess(), recipe.input, recipe.recipe.getOutputNotNull());
       }
     }
@@ -1127,11 +1179,11 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     return amount;
   }
 
-  private boolean matchingRecipe(Map<ItemStack, Integer> requiredItems, BlockMenu inv) {
+  private boolean matchingRecipe(ItemStack[] requiredTemplates, BlockMenu inv) {
     // One visible item of each distinct ingredient is enough to select a recipe. The staged
     // reservation engine then consumes one legal stack at a time until the full quantities arrive.
     final int[] inputSlots = getInputSlots();
-    for (ItemStack required : requiredItems.keySet()) {
+    for (ItemStack required : requiredTemplates) {
       boolean present = false;
       for (int slot : inputSlots) {
         ItemStack itemInSlot = inv.getItemInSlot(slot);
@@ -1278,8 +1330,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   }
 
   private void clearIdleRecipeBackoff(Block b) {
-    idleInputFingerprint.remove(b);
-    idleRecipeRecheckAfter.remove(b);
+    idleRecipeState.remove(b);
   }
 
   /**
