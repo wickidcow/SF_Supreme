@@ -59,7 +59,7 @@ grep -q 'Map<Block, Long> idleRecipeRecheckAfter = new ConcurrentHashMap<>()' "$
 grep -q 'Map<Block, Map<ItemStack, Integer>> activeRequiredItems = new ConcurrentHashMap<>()' "$GENERIC"
 grep -q 'consumedItemsMap.computeIfAbsent(b, ignored -> new ConcurrentHashMap<>())' "$GENERIC"
 grep -q 'consumedItemsMap.put(b, new ConcurrentHashMap<>())' "$GENERIC"
-grep -q 'consumedItemsMap.put(b, new ConcurrentHashMap<>(state.consumedItems()))' "$GENERIC"
+grep -q 'consumedItemsMap.put(b, canonicalizeConsumedItems(requiredItems, state.consumedItems()))' "$GENERIC"
 
 # Networks/Cargo routing must reuse precomputed recipe requirements instead of regrouping every query.
 grep -q 'transportRecipeIndex' "$GENERIC"
