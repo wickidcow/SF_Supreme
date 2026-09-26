@@ -721,12 +721,14 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   }
 
   private boolean takeMachineCharge(Block b, BlockMenu inv) {
-    if (getCharge(b.getLocation()) < getEnergyConsumption()) {
+    final Location location = inv.getLocation();
+    final int energyConsumption = getEnergyConsumption();
+    if (getCharge(location) < energyConsumption) {
       updateStatusConnectEnergy(inv, null);
       backoff(b);
       return false;
     }
-    removeCharge(b.getLocation(), getEnergyConsumption());
+    removeCharge(location, energyConsumption);
     return true;
   }
 
@@ -804,13 +806,15 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return;
     }
 
-    if (getCharge(b.getLocation()) < getEnergyConsumption()) {
+    final Location location = inv.getLocation();
+    final int energyConsumption = getEnergyConsumption();
+    if (getCharge(location) < energyConsumption) {
       updateStatusConnectEnergy(inv, recipe.getOutput()[0]);
       backoff(b);
       return;
     }
 
-    removeCharge(b.getLocation(), getEnergyConsumption());
+    removeCharge(location, energyConsumption);
     onProcessStarted(b, inv, recipe);
     int nextProgress = Math.max(ticksRemaining - getSpeed(), 0);
     progressTime.put(b, nextProgress);
@@ -841,12 +845,13 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private int reserveAvailableInputBatch(Block b, BlockMenu inv, ItemStack[] recipe) {
     Map<ItemStack, Integer> requiredItems = getActiveRequiredItems(b, recipe);
     Map<ItemStack, Integer> consumedItems = getConsumedItems(b);
+    final int[] inputSlots = getInputSlots();
     int totalConsumedNow = 0;
 
     for (Map.Entry<ItemStack, Integer> entry : requiredItems.entrySet()) {
       ItemStack requiredItem = entry.getKey();
       int requiredAmount = entry.getValue();
-      int alreadyReserved = countMapAmount(consumedItems, requiredItem);
+      int alreadyReserved = consumedItems.getOrDefault(requiredItem, 0);
       int remainingRequired = requiredAmount - alreadyReserved;
       if (remainingRequired <= 0) {
         continue;
@@ -856,7 +861,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
           Math.min(MAX_STAGED_BATCH, requiredItem.getMaxStackSize()));
       int batchRemaining = Math.min(remainingRequired, legalBatch);
 
-      for (int slot : getInputSlots()) {
+      for (int slot : inputSlots) {
         ItemStack slotItem = inv.getItemInSlot(slot);
         if (slotItem == null || slotItem.getType().isAir()
             || !SlimefunUtils.isItemSimilar(slotItem, requiredItem, false, false)) {
@@ -865,10 +870,10 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
         int amountToConsume = Math.min(slotItem.getAmount(), batchRemaining);
         if (amountToConsume > 0) {
-          ItemStack consumed = slotItem.clone();
-          consumed.setAmount(1);
           inv.consumeItem(slot, amountToConsume);
-          mergeSimilar(consumedItems, consumed, amountToConsume);
+          // Reuse the immutable canonical recipe key. This avoids cloning an ItemStack and
+          // rescanning the reserved-item map for every staged stack.
+          consumedItems.merge(requiredItem, amountToConsume, Integer::sum);
           batchRemaining -= amountToConsume;
           totalConsumedNow += amountToConsume;
         }
@@ -1063,7 +1068,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private boolean hasAllReservedInputs(Block b, ItemStack[] recipe) {
     Map<ItemStack, Integer> consumedItems = getConsumedItems(b);
     for (Map.Entry<ItemStack, Integer> entry : getActiveRequiredItems(b, recipe).entrySet()) {
-      if (countMapAmount(consumedItems, entry.getKey()) < entry.getValue()) {
+      if (consumedItems.getOrDefault(entry.getKey(), 0) < entry.getValue()) {
         return false;
       }
     }
@@ -1074,7 +1079,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     int available = 0;
     Map<ItemStack, Integer> consumedItems = getConsumedItems(b);
     for (Map.Entry<ItemStack, Integer> entry : getActiveRequiredItems(b, recipe).entrySet()) {
-      int reserved = countMapAmount(consumedItems, entry.getKey());
+      int reserved = consumedItems.getOrDefault(entry.getKey(), 0);
       int visible = countAvailable(inv, entry.getKey());
       available += Math.min(entry.getValue(), reserved + visible);
     }
@@ -1091,7 +1096,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
   private int countAvailable(BlockMenu inv, ItemStack requiredItem) {
     int amount = 0;
-    for (int slot : getInputSlots()) {
+    final int[] inputSlots = getInputSlots();
+    for (int slot : inputSlots) {
       ItemStack slotItem = inv.getItemInSlot(slot);
       if (slotItem != null && !slotItem.getType().isAir()
           && SlimefunUtils.isItemSimilar(slotItem, requiredItem, false, false)) {
@@ -1104,9 +1110,10 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private boolean matchingRecipe(Map<ItemStack, Integer> requiredItems, BlockMenu inv) {
     // One visible item of each distinct ingredient is enough to select a recipe. The staged
     // reservation engine then consumes one legal stack at a time until the full quantities arrive.
+    final int[] inputSlots = getInputSlots();
     for (ItemStack required : requiredItems.keySet()) {
       boolean present = false;
-      for (int slot : getInputSlots()) {
+      for (int slot : inputSlots) {
         ItemStack itemInSlot = inv.getItemInSlot(slot);
         if (itemInSlot != null
             && SlimefunUtils.isItemSimilar(itemInSlot, required, false, false)) {
@@ -1151,6 +1158,40 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     return amount;
   }
 
+  private Map<ItemStack, Integer> canonicalizeConsumedItems(
+      Map<ItemStack, Integer> requiredItems, Map<ItemStack, Integer> restoredItems) {
+    Map<ItemStack, Integer> canonical = new ConcurrentHashMap<>();
+    if (restoredItems == null || restoredItems.isEmpty()) {
+      return canonical;
+    }
+
+    for (Map.Entry<ItemStack, Integer> restored : restoredItems.entrySet()) {
+      ItemStack item = restored.getKey();
+      int amount = restored.getValue() == null ? 0 : restored.getValue();
+      if (item == null || item.getType().isAir() || amount <= 0) {
+        continue;
+      }
+
+      ItemStack canonicalKey = null;
+      for (ItemStack required : requiredItems.keySet()) {
+        if (SlimefunUtils.isItemSimilar(required, item, false, false)) {
+          canonicalKey = required;
+          break;
+        }
+      }
+
+      if (canonicalKey != null) {
+        canonical.merge(canonicalKey, amount, Integer::sum);
+      } else {
+        // Preserve unexpected legacy/corrupt entries for lossless rollback.
+        ItemStack fallback = item.clone();
+        fallback.setAmount(1);
+        canonical.merge(fallback, amount, Integer::sum);
+      }
+    }
+    return canonical;
+  }
+
   private void mergeSimilar(Map<ItemStack, Integer> items, ItemStack item, int amount) {
     for (Map.Entry<ItemStack, Integer> entry : items.entrySet()) {
       if (SlimefunUtils.isItemSimilar(entry.getKey(), item, false, false)) {
@@ -1186,10 +1227,11 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     if (restored.isPresent()) {
       SupremeMachineStateCodec.State state = restored.get();
       processing.put(b, state.recipe());
-      activeRequiredItems.put(b, groupSimilarItems(state.recipe().getInput()));
+      Map<ItemStack, Integer> requiredItems = groupSimilarItems(state.recipe().getInput());
+      activeRequiredItems.put(b, requiredItems);
       progressTime.put(b, Math.max(0, state.progress()));
       attemptCount.put(b, Math.max(0, state.attempts()));
-      consumedItemsMap.put(b, new ConcurrentHashMap<>(state.consumedItems()));
+      consumedItemsMap.put(b, canonicalizeConsumedItems(requiredItems, state.consumedItems()));
       lastProgressCheckpoint.put(b, Math.max(0, state.progress()));
       heavyCheckAfter.remove(b);
       return true;
