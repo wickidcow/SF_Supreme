@@ -74,8 +74,12 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private final Map<Block, Map<ItemStack, Integer>> consumedItemsMap = new ConcurrentHashMap<>();
   private final Map<Block, Integer> attemptCount = new ConcurrentHashMap<>();
   private final Map<Block, Long> heavyCheckAfter = new ConcurrentHashMap<>();
-  private final Map<Block, Integer> idleInputFingerprint = new ConcurrentHashMap<>();
-  private final Map<Block, Long> idleRecipeRecheckAfter = new ConcurrentHashMap<>();
+  /*
+   * Keep the idle fingerprint and periodic full-recheck deadline in one mutable state object.
+   * This avoids two ConcurrentHashMap lookups plus boxed Integer/Long replacement on every idle
+   * recipe miss while preserving the exact 200-tick collision-safety revalidation.
+   */
+  private final Map<Block, IdleRecipeState> idleRecipeState = new ConcurrentHashMap<>();
   private final Map<Block, Map<ItemStack, Integer>> activeRequiredItems = new ConcurrentHashMap<>();
   private final List<RecipeCache> recipeCaches = new ArrayList<>();
   private final Map<Material, List<RecipeCache>> transportRecipeIndex = new HashMap<>();
@@ -93,11 +97,23 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     }
   }
 
+  private static final class IdleRecipeState {
+    private volatile int fingerprint;
+    private volatile long recheckAfter;
+
+    private IdleRecipeState(int fingerprint, long recheckAfter) {
+      this.fingerprint = fingerprint;
+      this.recheckAfter = recheckAfter;
+    }
+  }
+
   private static final class RecipeCache {
 
     private final AbstractItemRecipe recipe;
     private final ItemStack[] input;
     private final Map<ItemStack, Integer> requiredItems;
+    private final ItemStack[] requiredTemplates;
+    private final int[] requiredAmounts;
     private Set<Material> requiredMaterials = Set.of();
     private Material anchorMaterial;
 
@@ -106,6 +122,15 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       this.recipe = recipe;
       this.input = input;
       this.requiredItems = requiredItems;
+      this.requiredTemplates = new ItemStack[requiredItems.size()];
+      this.requiredAmounts = new int[requiredItems.size()];
+
+      int index = 0;
+      for (Map.Entry<ItemStack, Integer> entry : requiredItems.entrySet()) {
+        this.requiredTemplates[index] = entry.getKey();
+        this.requiredAmounts[index] = entry.getValue();
+        index++;
+      }
     }
   }
 
