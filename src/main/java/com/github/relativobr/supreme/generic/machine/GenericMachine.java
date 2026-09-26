@@ -66,19 +66,32 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   // AContainer ticks asynchronously on Paper/Purpur, while transport and block-break paths may
   // inspect or clear the same placed-machine state from another server-owned thread.
   private final Map<Block, MachineRecipe> processing = new ConcurrentHashMap<>();
-  private final Map<Block, Integer> progressTime = new ConcurrentHashMap<>();
+  /*
+   * Running machines update progress every ticker pass. Keep remaining progress and checkpoint
+   * state in one mutable object instead of replacing boxed Integers in two concurrent maps.
+   */
+  private final Map<Block, ProgressState> progressState = new ConcurrentHashMap<>();
   private final Map<Block, Map<ItemStack, Integer>> consumedItemsMap = new ConcurrentHashMap<>();
   private final Map<Block, Integer> attemptCount = new ConcurrentHashMap<>();
   private final Map<Block, Long> heavyCheckAfter = new ConcurrentHashMap<>();
   private final Map<Block, Integer> idleInputFingerprint = new ConcurrentHashMap<>();
   private final Map<Block, Long> idleRecipeRecheckAfter = new ConcurrentHashMap<>();
-  private final Map<Block, Integer> lastProgressCheckpoint = new ConcurrentHashMap<>();
   private final Map<Block, Map<ItemStack, Integer>> activeRequiredItems = new ConcurrentHashMap<>();
   private final List<RecipeCache> recipeCaches = new ArrayList<>();
   private final Map<Material, List<RecipeCache>> transportRecipeIndex = new HashMap<>();
   public final List<AbstractItemRecipe> machineRecipes = new ArrayList<>();
   private Integer timeProcess;
   private String machineIdentifier = "MediumContainerMachine";
+
+  private static final class ProgressState {
+    private volatile int remaining;
+    private volatile int lastCheckpoint;
+
+    private ProgressState(int remaining, int lastCheckpoint) {
+      this.remaining = remaining;
+      this.lastCheckpoint = lastCheckpoint;
+    }
+  }
 
   private static final class RecipeCache {
 
@@ -636,7 +649,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   }
 
   protected int getProgressTime(Block b) {
-    return progressTime.getOrDefault(b, getTimeProcess());
+    ProgressState state = progressState.get(b);
+    return state == null ? getTimeProcess() : state.remaining;
   }
 
   protected MachineRecipe getProcessing(Block b) {
@@ -660,11 +674,10 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     if (next != null) {
       processing.put(b, next);
       activeRequiredItems.put(b, groupSimilarItems(next.getInput()));
-      progressTime.put(b, next.getTicks());
+      progressState.put(b, new ProgressState(next.getTicks(), next.getTicks()));
       consumedItemsMap.put(b, new ConcurrentHashMap<>());
       attemptCount.put(b, 0);
       heavyCheckAfter.remove(b);
-      lastProgressCheckpoint.put(b, next.getTicks());
       persistState(b);
     } else {
       if (getInputSlots().length <= 5) {
@@ -677,13 +690,12 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   }
 
   protected final void removeMapBlock(Block b) {
-    progressTime.remove(b);
+    progressState.remove(b);
     processing.remove(b);
     attemptCount.remove(b);
     consumedItemsMap.remove(b);
     heavyCheckAfter.remove(b);
     clearIdleRecipeBackoff(b);
-    lastProgressCheckpoint.remove(b);
     activeRequiredItems.remove(b);
     SupremeMachineStateCodec.clear(b);
   }
@@ -817,7 +829,10 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     removeCharge(location, energyConsumption);
     onProcessStarted(b, inv, recipe);
     int nextProgress = Math.max(ticksRemaining - getSpeed(), 0);
-    progressTime.put(b, nextProgress);
+    ProgressState progress = progressState.get(b);
+    if (progress != null) {
+      progress.remaining = nextProgress;
+    }
     attemptCount.put(b, 0);
     heavyCheckAfter.remove(b);
     persistState(b);
@@ -1054,14 +1069,19 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   private void doProcessTicks(Block b, BlockMenu inv, int ticks, int ticksRemaining,
       ItemStack result) {
     int nextProgress = Math.max(ticksRemaining - getSpeed(), 0);
-    progressTime.put(b, nextProgress);
+    ProgressState progress = progressState.get(b);
+    if (progress == null) {
+      ProgressState created = new ProgressState(ticksRemaining, ticks);
+      ProgressState raced = progressState.putIfAbsent(b, created);
+      progress = raced == null ? created : raced;
+    }
+    progress.remaining = nextProgress;
     ChestMenuUtils.updateProgressbar(inv, getStatusSlot(), ticksRemaining, ticks, result);
 
-    int previousCheckpoint = lastProgressCheckpoint.getOrDefault(b, ticks);
     if (nextProgress <= 0
-        || Math.abs(previousCheckpoint - nextProgress) >= PROGRESS_CHECKPOINT_INTERVAL) {
+        || Math.abs(progress.lastCheckpoint - nextProgress) >= PROGRESS_CHECKPOINT_INTERVAL) {
       SupremeMachineStateCodec.saveProgress(b, nextProgress);
-      lastProgressCheckpoint.put(b, nextProgress);
+      progress.lastCheckpoint = nextProgress;
     }
   }
 
@@ -1210,9 +1230,13 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       SupremeMachineStateCodec.clear(b);
       return;
     }
-    SupremeMachineStateCodec.save(b, recipe, getProgressTime(b),
+    final int progressValue = getProgressTime(b);
+    SupremeMachineStateCodec.save(b, recipe, progressValue,
         attemptCount.getOrDefault(b, 0), getConsumedItems(b));
-    lastProgressCheckpoint.put(b, getProgressTime(b));
+    ProgressState progress = progressState.get(b);
+    if (progress != null) {
+      progress.lastCheckpoint = progressValue;
+    }
   }
 
   private boolean restorePersistentStateIfNeeded(Block b, BlockMenu inv) {
@@ -1229,10 +1253,10 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       processing.put(b, state.recipe());
       Map<ItemStack, Integer> requiredItems = groupSimilarItems(state.recipe().getInput());
       activeRequiredItems.put(b, requiredItems);
-      progressTime.put(b, Math.max(0, state.progress()));
+      int restoredProgress = Math.max(0, state.progress());
+      progressState.put(b, new ProgressState(restoredProgress, restoredProgress));
       attemptCount.put(b, Math.max(0, state.attempts()));
       consumedItemsMap.put(b, canonicalizeConsumedItems(requiredItems, state.consumedItems()));
-      lastProgressCheckpoint.put(b, Math.max(0, state.progress()));
       heavyCheckAfter.remove(b);
       return true;
     }
