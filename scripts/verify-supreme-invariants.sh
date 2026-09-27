@@ -201,10 +201,25 @@ grep -q 'supreme_armor_thornium_epic' "$ARMOR"
 grep -q 'supreme_armor_thornium_legendary' "$ARMOR"
 grep -q 'supreme_armor_thornium_supreme' "$ARMOR"
 
+
+# Tech Generator MobTech roles and formulas must stay aligned with the item lore. The historical
+# upstream implementation used 0.015625 for speed (10x too small) and accidentally gave every
+# MobTech type a speed bonus.
+TECH_GENERATOR="$JAVA/machine/tech/TechGenerator.java"
+grep -q 'MOB_TECH_EFFECT_PER_ITEM = 0.15625F' "$TECH_GENERATOR"
+grep -q 'case SIMPLE -> Math.round(amount \* MOB_TECH_EFFECT_PER_ITEM)' "$TECH_GENERATOR"
+grep -q 'case ROBOTIC_ACCELERATION, MUTATION_BERSERK ->' "$TECH_GENERATOR"
+grep -q 'Math.round((mobTech.getMobTechTier() + 1) \* amount \* MOB_TECH_EFFECT_PER_ITEM)' "$TECH_GENERATOR"
+grep -q 'case ROBOTIC_EFFICIENCY, ROBOTIC_CLONING, MUTATION_INTELLIGENCE, MUTATION_LUCK -> 0;' "$TECH_GENERATOR"
+if grep -q '0\.015625F' "$TECH_GENERATOR"; then
+  echo "Tech Generator speed effects must not regress to the historical 10x-too-small constant." >&2
+  exit 1
+fi
+
 SETUP_TECH="$JAVA/setup/SetupTechMachines.java"
 grep -q 'setMachineIdentifier(TechRobotic.TECH_ROBOTIC_II.getItemId())' "$SETUP_TECH"
 grep -q 'setMachineIdentifier(TechRobotic.TECH_ROBOTIC_III.getItemId())' "$SETUP_TECH"
 
 grep -q 'SupremeMachineDiagnostics diagnostics' "$JAVA/command/SupremeCommand.java"
 
-echo "Supreme forward-compatibility, machine concurrency, transport, mob scan, async output safety, inventory-aware idle backoff, rollback, persistence, armor, and energy invariants verified."
+echo "Supreme forward-compatibility, machine concurrency, transport, mob scan, async output safety, inventory-aware idle backoff, rollback, persistence, armor, energy, and Tech Generator MobTech invariants verified."

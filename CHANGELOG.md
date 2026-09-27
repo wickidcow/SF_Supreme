@@ -1,5 +1,17 @@
 # Changelog
 
+## Supreme Legacy 1.0.17
+
+### Tech Generator MobTech Effects
+
+- Fixed an inherited Tech Generator acceleration bug where the code used `0.015625` per MobTech item even though Supreme's item lore documents `0.15625`.
+- Applies the documented speed formula before rounding: Simple MobTech uses `round(amount × 0.15625)`, while Robotic Acceleration and Berserk use `round((tier + 1) × amount × 0.15625)`.
+- Robotic Efficiency and Mutation Intelligence now affect energy consumption only, matching their lore.
+- Robotic Cloning and Mutation Luck now affect bonus output only, matching their lore.
+- Preserves the existing acceleration energy-cost increase, efficiency energy reduction, cloning/luck output behavior, Tech Generator recipes, item IDs, and output cap.
+- Added CI invariants for the MobTech role split and the documented acceleration constant so this inherited bug cannot silently return.
+
+
 ## Supreme Legacy 1.0.11
 
 ### Async Machine State Safety

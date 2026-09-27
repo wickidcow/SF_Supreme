@@ -77,6 +77,8 @@ public class TechGenerator extends SimpleItemContainerMachine implements Radioac
   private final Map<Block, StaticStatus> staticStatuses = new HashMap<>();
   private NamespacedKey mobTechTierKey;
   private NamespacedKey mobTechTypeKey;
+  private static final float MOB_TECH_EFFECT_PER_ITEM = 0.15625F;
+
   private int speed = 1;
 
   private record RecipeMatch(@Nullable ItemStack observedInput, @Nullable ItemStack output) {}
@@ -370,13 +372,7 @@ public class TechGenerator extends SimpleItemContainerMachine implements Radioac
 
       SlimefunItem slimefunItem = SlimefunItem.getByItem(input);
       if (slimefunItem instanceof MobTech mobTech) {
-        int roundTimeAmount = Math.round(input.getAmount() * 0.015625F);
-        if (mobTech.getMobTechType() == MobTechType.ROBOTIC_ACCELERATION
-            || mobTech.getMobTechType() == MobTechType.MUTATION_BERSERK) {
-          timeReduction += (mobTech.getMobTechTier() + 1) * roundTimeAmount;
-        } else {
-          timeReduction += roundTimeAmount;
-        }
+        timeReduction += calculateTimeReduction(mobTech, input.getAmount());
 
         if (mobTech.getMobTechType() == MobTechType.ROBOTIC_CLONING
             || mobTech.getMobTechType() == MobTechType.MUTATION_LUCK) {
@@ -405,6 +401,15 @@ public class TechGenerator extends SimpleItemContainerMachine implements Radioac
 
     return new GenerationPlan(outputs.toArray(ItemStack[]::new), timeReduction,
         Math.max(consumption, 1));
+  }
+
+  private static int calculateTimeReduction(MobTech mobTech, int amount) {
+    return switch (mobTech.getMobTechType()) {
+      case SIMPLE -> Math.round(amount * MOB_TECH_EFFECT_PER_ITEM);
+      case ROBOTIC_ACCELERATION, MUTATION_BERSERK ->
+          Math.round((mobTech.getMobTechTier() + 1) * amount * MOB_TECH_EFFECT_PER_ITEM);
+      case ROBOTIC_EFFICIENCY, ROBOTIC_CLONING, MUTATION_INTELLIGENCE, MUTATION_LUCK -> 0;
+    };
   }
 
   private void addUpgradeOutputs(ItemStack input, ItemStack baseOutput, MobTech mobTech,
