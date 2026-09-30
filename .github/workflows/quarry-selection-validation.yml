@@ -1,0 +1,132 @@
+name: Supreme Quarry Selection Preservation
+
+on:
+  push:
+    branches: ['work/quarry-selection-validation']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: supreme-quarry-selection-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: wickidcow/Slimefun-Legacy
+          ref: d600e077552baab2086a056d04b1cb0a6a9051a5
+          path: .deps/core
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Apply exact selection-only patch
+        run: |
+          python3 - <<'PY'
+          import gzip, hashlib, json
+          from pathlib import Path
+          def blob(data):
+              return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+          payload = b''.join(Path(f'.audit/quarry-selection.{i}').read_bytes() for i in range(3))
+          assert blob(payload) == '332b68f1bef44a818e2be5f933321dad424bd23a'
+          changes = json.loads(gzip.decompress(payload))
+          assert len(changes) == 4
+          prepared = {}
+          for change in changes:
+              path = Path(change['path'])
+              assert not path.is_absolute() and '..' not in path.parts
+              assert str(path).startswith(('src/main/java/', 'src/test/java/')) or str(path) == 'pom.xml'
+              if change['old'] is None:
+                  assert not path.exists()
+                  text = change['content']
+              else:
+                  assert blob(path.read_bytes()) == change['old'], path
+                  text = path.read_text()
+                  for before, after in change['replacements']:
+                      assert text.count(before) == 1, path
+                      text = text.replace(before, after)
+              data = text.encode()
+              assert blob(data) == change['new'], path
+              prepared[str(path)] = data
+          for name, data in prepared.items():
+              path = Path(name)
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(data)
+          Path('audit-evidence').mkdir()
+          Path('audit-evidence/source-manifest.json').write_text(json.dumps({name: blob(data) for name, data in prepared.items()}, indent=2))
+          PY
+          git diff --check
+      - name: Run all retained source and Doctor invariants
+        run: |
+          bash scripts/verify-supreme-invariants.sh .
+          bash scripts/verify-doctor-migration.sh .
+      - name: Build the exact tested Legacy API
+        working-directory: .deps/core
+        run: |
+          chmod +x gradlew
+          ./gradlew publishToMavenLocal -x test -PprojectVersion=Legacy-SNAPSHOT --console=plain --no-daemon
+      - name: Build Supreme and test historical quarry selection semantics
+        run: |
+          set -euo pipefail
+          mvn -B -Plegacy clean verify 2>&1 | tee audit-evidence/build.log
+          python3 - <<'PY'
+          import hashlib, json, struct, xml.etree.ElementTree as ET, zipfile
+          from pathlib import Path
+          report = Path('target/surefire-reports/TEST-com.github.relativobr.supreme.util.QuarryRollSelectionTest.xml')
+          suite = ET.parse(report).getroot()
+          assert int(suite.get('tests', '0')) == 13, suite.attrib
+          assert all(int(suite.get(key, '0')) == 0 for key in ('failures', 'errors', 'skipped')), suite.attrib
+          jar = Path('target/SF_Supreme1.0.17.jar')
+          with zipfile.ZipFile(jar) as archive:
+              assert archive.testzip() is None
+              for name in archive.namelist():
+                  if name.endswith('.class'):
+                      assert struct.unpack('>H', archive.read(name)[6:8])[0] <= 65, name
+          print('Actual quarry regression results:', suite.attrib)
+          Path('audit-evidence/results.json').write_text(json.dumps(dict(tests=suite.attrib, jar_sha256=hashlib.sha256(jar.read_bytes()).hexdigest()), indent=2))
+          PY
+          git diff --check
+      - name: Retain exact validated source objects without changing refs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, os, subprocess
+          from pathlib import Path
+          manifest = json.loads(Path('audit-evidence/source-manifest.json').read_text())
+          for name, expected in manifest.items():
+              data = Path(name).read_bytes()
+              assert hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest() == expected
+              body = json.dumps({'content': base64.b64encode(data).decode(), 'encoding': 'base64'})
+              response = subprocess.run(['gh', 'api', '--method', 'POST', f"repos/{os.environ['GITHUB_REPOSITORY']}/git/blobs", '--input', '-', '--jq', '.sha'], input=body, text=True, capture_output=True, check=True)
+              assert response.stdout.strip() == expected
+              destination = Path('audit-evidence/tested-source', name)
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              destination.write_bytes(data)
+              print('VALIDATED_SOURCE_BLOB', expected, name)
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: supreme-quarry-selection-evidence
+          path: |
+            audit-evidence/
+            target/surefire-reports/TEST-*.xml
+          retention-days: 14
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v7
+        with:
+          name: SF_Supreme1.0.17-quarry-candidate.jar
+          path: target/SF_Supreme1.0.17.jar
+          archive: false
+          if-no-files-found: error
