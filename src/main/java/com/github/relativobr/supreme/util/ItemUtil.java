@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -145,20 +144,9 @@ public class ItemUtil {
 
 
     public static ItemStack getItemQuarry(SupremeQuarryOutput output, int randomInt) {
-        AtomicInteger startValue = new AtomicInteger(0);
-        AtomicInteger nextValue = new AtomicInteger(0);
-        ItemStack item = null;
-        final List<AbstractQuarryOutputItem> outputItems = output.getOutputItems().stream().filter(Objects::nonNull)
-                .collect(Collectors.toList());
-        for (AbstractQuarryOutputItem outputItem : outputItems) {
-            nextValue.set(startValue.get() + outputItem.getChance());
-            if (startValue.get() <= randomInt && nextValue.get() >= randomInt) {
-                item = outputItem.getItemStack();
-                break;
-            }
-            startValue.set(nextValue.get());
-        }
-        return item;
+        AbstractQuarryOutputItem selected = QuarryRollSelection.select(
+                output.getOutputItems(), AbstractQuarryOutputItem::getChance, randomInt);
+        return selected == null ? null : selected.getItemStack();
     }
 
 

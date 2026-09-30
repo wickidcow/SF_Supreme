@@ -29,6 +29,7 @@
         <dependency><groupId>${slimefun.groupId}</groupId><artifactId>${slimefun.artifactId}</artifactId><version>${slimefun.version}</version><scope>provided</scope></dependency>
         <dependency><groupId>com.google.code.findbugs</groupId><artifactId>jsr305</artifactId><version>3.0.2</version><scope>provided</scope></dependency>
         <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>${lombok.version}</version><scope>provided</scope></dependency>
+        <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.12.2</version><scope>test</scope></dependency>
     </dependencies>
 
     <profiles>
@@ -54,6 +55,7 @@
             <resource><directory>${project.basedir}</directory><includes><include>LICENSE</include></includes></resource>
         </resources>
         <plugins>
+            <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.2</version></plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version>
                 <configuration>
