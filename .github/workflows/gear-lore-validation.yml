@@ -1,0 +1,135 @@
+name: Supreme Gear Lore Preservation Validation
+
+on:
+  push:
+    branches: ['work/gear-components-validation']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gear-components-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Apply exact reviewed gear-lore patch
+        run: |
+          set -euo pipefail
+          mkdir -p audit-evidence
+          python3 - <<'PY'
+          import gzip, hashlib, re, json, subprocess
+          from pathlib import Path
+          patch = gzip.decompress(Path('.audit/gear-lore.patch.gz').read_bytes())
+          assert hashlib.sha256(patch).hexdigest() == '33b1d4ff62136708e0f08683207c56271def619e0d32c6ad44f6ace464548e94'
+          names = []
+          for part in patch.decode().split('diff --git ')[1:]:
+              name = part.splitlines()[0].split(' b/', 1)[1]
+              old, new = re.search(r'^index ([0-9a-f]{40})\.\.([0-9a-f]{40})', part, re.M).groups()
+              path = Path(name)
+              assert not path.is_absolute() and '..' not in path.parts
+              if old == '0' * 40: assert not path.exists()
+              else:
+                  data = path.read_bytes()
+                  assert hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest() == old, name
+              names.append(name)
+          assert len(names) == 4
+          subprocess.run(['git','apply','--check','-'],input=patch,check=True)
+          subprocess.run(['git','apply','-'],input=patch,check=True)
+          Path('audit-evidence/paths.json').write_text(json.dumps(names))
+          PY
+          git diff --check
+      - name: Build the exact coordinated Legacy API locally
+        run: |
+          set -euo pipefail
+          CORE="$RUNNER_TEMP/verified-core"
+          git init "$CORE"
+          git -C "$CORE" remote add origin https://github.com/wickidcow/Slimefun-Legacy.git
+          git -C "$CORE" fetch --depth=1 origin 9e8de71adf70e9a361a74c21afe5e7006c85faf6
+          git -C "$CORE" checkout --detach FETCH_HEAD
+          test "$(git -C "$CORE" rev-parse HEAD)" = 9e8de71adf70e9a361a74c21afe5e7006c85faf6
+          (cd "$CORE" && chmod +x gradlew && ./gradlew shadowJar -x test --console=plain --no-daemon)
+          JAR="$(find "$CORE/build/libs" -name 'Slimefun-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' -print -quit)"
+          test -s "$JAR"
+          mvn -q org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
+            -Dfile="$JAR" -DgroupId=com.github.slimefun -DartifactId=Slimefun \
+            -Dversion=Legacy-SNAPSHOT -Dpackaging=jar -DgeneratePom=true
+          echo 'Core source: 9e8de71adf70e9a361a74c21afe5e7006c85faf6' > audit-evidence/core.txt
+          sha256sum "$JAR" >> audit-evidence/core.txt
+      - name: Verify invariant guards and build the full project
+        run: |
+          set -euo pipefail
+          bash scripts/verify-supreme-invariants.sh
+          bash scripts/verify-doctor-migration.sh
+          mvn -B clean verify -Plegacy -Dmaven.compiler.showDeprecation=true 2>&1 | tee audit-evidence/build.log
+          git diff --check
+      - name: Check actual metadata tests and distributable classes
+        run: |
+          python3 - <<'PY'
+          import json, struct, zipfile
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          totals = dict.fromkeys(('tests','failures','errors','skipped'),0)
+          found = False
+          for p in Path('target/surefire-reports').glob('TEST-*.xml'):
+              suite = ET.parse(p).getroot()
+              for key in totals: totals[key] += int(suite.get(key,'0'))
+              if p.name.endswith('.GearLoreTest.xml'):
+                  found = True
+                  assert int(suite.get('tests')) == 8, suite.attrib
+                  assert all(int(suite.get(k,'0'))==0 for k in ('failures','errors','skipped')), suite.attrib
+          assert found and totals['failures'] == totals['errors'] == totals['skipped'] == 0, totals
+          with zipfile.ZipFile('target/SF_Supreme1.0.17.jar') as z:
+              assert z.testzip() is None
+              assert not any('mockbukkit' in n.lower() or 'junit' in n.lower() for n in z.namelist())
+              for name in z.namelist():
+                  if name.endswith('.class') and not name.startswith('META-INF/versions/'):
+                      assert struct.unpack('>H',z.read(name)[6:8])[0] <= 65, name
+          Path('audit-evidence/results.json').write_text(json.dumps(totals,indent=2))
+          print(totals)
+          PY
+      - name: Preserve only validated source blobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64,hashlib,json,os,subprocess
+          from pathlib import Path
+          manifest={}
+          for name in json.loads(Path('audit-evidence/paths.json').read_text()):
+              data=Path(name).read_bytes()
+              expected=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+              body=json.dumps({'content':base64.b64encode(data).decode(),'encoding':'base64'})
+              result=subprocess.run(['gh','api','--method','POST',f"repos/{os.environ['GITHUB_REPOSITORY']}/git/blobs",'--input','-','--jq','.sha'],input=body,text=True,capture_output=True,check=True)
+              assert result.stdout.strip()==expected
+              manifest[name]=expected
+          Path('audit-evidence/validated-blobs.json').write_text(json.dumps(manifest,indent=2))
+          print(manifest)
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: supreme-gear-preservation-evidence
+          path: |
+            audit-evidence/
+            target/surefire-reports/TEST-*.xml
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v7
+        if: success()
+        with:
+          path: target/SF_Supreme1.0.17.jar
+          archive: false
+          if-no-files-found: error
