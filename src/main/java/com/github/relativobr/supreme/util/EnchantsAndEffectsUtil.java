@@ -32,14 +32,8 @@ public class EnchantsAndEffectsUtil {
 
             ItemMeta meta = item.getItemMeta();
 
-            // lore
-            List<String> lore;
-            if (meta.hasLore()) {
-                lore = meta.getLore();
-            } else {
-                lore = new ArrayList<>();
-                lore.add("");
-            }
+            // Generate only the new lines; retain existing component lore without flattening it.
+            List<String> lore = new ArrayList<>();
 
             lore.add(ChatColor.AQUA + "Soulbound");
 
@@ -48,7 +42,7 @@ public class EnchantsAndEffectsUtil {
 
             buildLoreEffects(lore, itemPath);
 
-            meta.setLore(lore);
+            GearLore.append(meta, lore);
 
             ConfigurationSection itemSection = typeSection.getConfigurationSection(itemPath);
             if (itemSection != null) {
@@ -81,21 +75,15 @@ public class EnchantsAndEffectsUtil {
 
             ItemMeta meta = item.getItemMeta();
 
-            // lore
-            List<String> lore;
-            if (meta.hasLore()) {
-                lore = meta.getLore();
-            } else {
-                lore = new ArrayList<>();
-                lore.add("");
-            }
+            // Generate only the new lines; retain existing component lore without flattening it.
+            List<String> lore = new ArrayList<>();
 
             lore.add(ChatColor.AQUA + "Soulbound");
 
             // find path
             String itemPath = getNewIdSupremeLegacy(item.getItemId()).toLowerCase();
 
-            meta.setLore(lore);
+            GearLore.append(meta, lore);
 
             ConfigurationSection itemSection = typeSection.getConfigurationSection(itemPath);
             if (itemSection != null) {
