@@ -71,7 +71,7 @@ jobs:
           PLUGIN_VERSION=$(unzip -p "$JAR" plugin.yml | awk -F': *' '/^version:/ {gsub(/["'"'"']/,"",$2); print $2; exit}')
           test "$PLUGIN_VERSION" = "$VERSION"
           if printf '%s\n' "$PLUGIN_VERSION" | grep -Eiq '(legacy|english|snapshot)'; then exit 1; fi
-          if unzip -Z1 "$JAR" | grep -Eq '^(org/mockito/|org/junit/|org/mockbukkit/)'; then
+          if unzip -Z1 "$JAR" | grep -E '^(org/mockito/|org/junit/|org/mockbukkit/)' >/dev/null; then
             echo "Test dependencies must not be packaged in the release JAR." >&2
             exit 1
           fi
