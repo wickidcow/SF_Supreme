@@ -29,6 +29,8 @@ public final class SupremeMachineStateCodec {
   private static final String KEY_ATTEMPTS = "supreme_machine_attempts";
   private static final String KEY_CONSUMED = "supreme_machine_consumed";
   private static final String STATE_VERSION = "1";
+  private static final String[] KEYS = {KEY_VERSION, KEY_INPUT, KEY_OUTPUT, KEY_TICKS,
+      KEY_PROGRESS, KEY_ATTEMPTS, KEY_CONSUMED};
 
   private SupremeMachineStateCodec() {
   }
@@ -39,6 +41,15 @@ public final class SupremeMachineStateCodec {
 
   public static boolean hasState(Block block) {
     return STATE_VERSION.equals(BlockStorage.getLocationInfo(block.getLocation(), KEY_VERSION));
+  }
+
+  /** Includes partial and unsupported records, which must never be mistaken for an idle machine. */
+  public static boolean hasStoredData(Block block) {
+    if (block == null) return false;
+    for (String key : KEYS) {
+      if (BlockStorage.getLocationInfo(block.getLocation(), key) != null) return true;
+    }
+    return false;
   }
 
   public static void save(Block block, MachineRecipe recipe, int progress, int attempts,
@@ -104,7 +115,7 @@ public final class SupremeMachineStateCodec {
       MachineRecipe recipe = new MachineRecipe(0, input, output);
       recipe.setTicks(ticks);
       Map<ItemStack, Integer> consumed = decodeConsumed(
-          BlockStorage.getLocationInfo(block.getLocation(), KEY_CONSUMED), decoder);
+          requirePresent(block, KEY_CONSUMED), decoder);
       return Optional.of(new State(recipe, progress, attempts, consumed));
     } catch (RuntimeException ex) {
       Supreme.inst().log(Level.WARNING,
@@ -187,17 +198,26 @@ public final class SupremeMachineStateCodec {
         continue;
       }
       ItemStack item = ItemStack.deserializeBytes(decoder.decode(token.substring(separator + 1)));
+      if (item == null || item.getType().isAir()) {
+        throw new IllegalArgumentException("reserved item is empty");
+      }
       item.setAmount(1);
-      consumed.put(item, amount);
+      consumed.merge(item, amount, Math::addExact);
     }
     return consumed;
   }
 
   private static String require(Block block, String key) {
-    String value = BlockStorage.getLocationInfo(block.getLocation(), key);
-    if (value == null || value.isBlank()) {
+    String value = requirePresent(block, key);
+    if (value.isBlank()) {
       throw new IllegalArgumentException("missing " + key);
     }
+    return value;
+  }
+
+  private static String requirePresent(Block block, String key) {
+    String value = BlockStorage.getLocationInfo(block.getLocation(), key);
+    if (value == null) throw new IllegalArgumentException("missing " + key);
     return value;
   }
 

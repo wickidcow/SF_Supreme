@@ -50,6 +50,14 @@ Important maintenance work includes:
 
 See `CHANGELOG.md` and `COMPATIBILITY.md` for deeper maintenance and testing details.
 
+## Machine checkpoint recovery
+
+A machine with an unreadable, incomplete or unsupported checkpoint pauses with `RECOVERY BLOCKED` in `/supreme doctor machine`. Its original Slimefun block-data fields remain in place. It does not consume inputs, spend energy or produce new outputs while blocked. Normal Slimefun player breaking, Android mining and explosions are prevented, and item-aware Cargo/Networks insertion uses the occupied status slot. Existing visible inventory contents remain accessible.
+
+After correcting the underlying data or restoring a known-good checkpoint from backup, look at the machine and run `/supreme doctor retry` with `supreme.admin`. Retry validates the record again without deleting or rewriting it; a valid record can resume through normal ticking. Restarting also starts a fresh validation lifecycle. If the data is still unreadable, the machine stays blocked. There is no automatic reset, partial-item payout or replacement with fresh item templates.
+
+The guard uses the existing version-1 storage format. It protects Supreme's normal machine and Slimefun break paths; it is not a backup system or a transaction around external tools that directly delete or replace block records. Tests distinguish recording-storage/MockBukkit evidence from real-server startup and restart smoke checks.
+
 ## ❤️ Credits & project lineage
 
 Supreme has been built by multiple developers over its history, and this fork preserves their credit:

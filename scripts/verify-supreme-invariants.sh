@@ -175,8 +175,27 @@ for machine in \
   grep -q 'clearIdleBackoff' "$machine"
 done
 
-grep -q 'loadReservedOnly' "$JAVA/machine/tech/TechRobotic.java"
-grep -q 'loadReservedOnly' "$JAVA/machine/tech/TechMutation.java"
+# Unreadable checkpoints must be held; empty-container fallbacks cannot authorize destruction.
+grep -q 'new SupremeMachineBreakHandler(this::isBreakRecoveryBlocked' "$GENERIC"
+grep -q 'recoveryGuard.block(b)' "$GENERIC"
+grep -q 'retryMachineRecovery' "$GENERIC"
+grep -q 'isRecoveryBlocked(blockMenu.getBlock())' "$GENERIC"
+for machine in "$GENERIC" \
+  "$JAVA/machine/VirtualGarden.java" \
+  "$JAVA/machine/VirtualAquarium.java" \
+  "$JAVA/machine/MobCollector.java" \
+  "$JAVA/machine/tech/TechRobotic.java" \
+  "$JAVA/machine/tech/TechMutation.java"; do
+  grep -q 'if (isRecoveryBlocked(b)) return;' "$machine"
+  grep -q 'addRecoveryDiagnosticLines' "$machine"
+  grep -q 'resetRecoveryRuntime' "$machine"
+done
+for machine in "$JAVA/machine/tech/TechRobotic.java" "$JAVA/machine/tech/TechMutation.java"; do
+  if grep -q 'loadReservedOnly' "$machine"; then
+    echo "Unreadable reserved items must not be interpreted as empty during recovery." >&2
+    exit 1
+  fi
+done
 grep -q 'saveAuxText' "$JAVA/machine/tech/TechMutation.java"
 
 grep -q 'commitAquariumTool' "$JAVA/machine/VirtualAquarium.java"

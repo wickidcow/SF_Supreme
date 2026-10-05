@@ -53,6 +53,7 @@ class MachineStateCodecTest {
     outputs = new ItemStack[]{new ItemStack(Material.DIAMOND, 2)};
     reserved = new ItemStack[]{mock(ItemStack.class)};
     reservedTemplate = mock(ItemStack.class);
+    when(reservedTemplate.getType()).thenReturn(Material.STONE);
     when(reserved[0].getType()).thenReturn(Material.STONE);
     when(reserved[0].clone()).thenReturn(reservedTemplate);
     when(reservedTemplate.serializeAsBytes()).thenAnswer(call -> serialize(RESERVED_BYTES));
@@ -219,6 +220,101 @@ class MachineStateCodecTest {
       throw new IllegalStateException("injected serialization failure");
     }
     return bytes;
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"state_version", "recipe_input", "recipe_output", "recipe_ticks",
+      "progress", "attempts", "consumed"})
+  void incompleteGenericRecordsAreNotAcceptedAsEmptyReservations(String missing) {
+    SupremeMachineStateCodec.save(block, recipe(31), 17, 4, Map.of(reserved[0], 901));
+    data.remove(GENERIC + missing);
+    Map<String, String> before = new LinkedHashMap<>(data);
+    writes = 0;
+    assertTrue(SupremeMachineStateCodec.hasStoredData(block));
+    assertTrue(SupremeMachineStateCodec.load(block).isEmpty());
+    assertEquals(before, data);
+    assertEquals(0, writes);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"state_version", "state_type", "progress", "ticks", "inputs", "outputs",
+      "reserved", "aux_int", "aux_text"})
+  void incompleteSpecializedRecordsAreNotAcceptedAsIdleMachines(String missing) {
+    SupremeSpecialMachineStateCodec.save(block, "robotic", 17, 31, inputs, outputs, reserved, -1, "");
+    data.remove(SPECIAL + missing);
+    Map<String, String> before = new LinkedHashMap<>(data);
+    writes = 0;
+    assertTrue(SupremeSpecialMachineStateCodec.hasStoredData(block));
+    assertTrue(SupremeSpecialMachineStateCodec.load(block, "robotic").isEmpty());
+    assertEquals(before, data);
+    assertEquals(0, writes);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"inputs", "outputs", "reserved"})
+  void malformedSpecializedItemBytesKeepTheOriginalCheckpoint(String field) {
+    SupremeSpecialMachineStateCodec.save(block, "robotic", 17, 31, inputs, outputs, reserved, -1, "");
+    data.put(SPECIAL + field, "invalid-base64!");
+    Map<String, String> before = new LinkedHashMap<>(data);
+    writes = 0;
+    assertTrue(SupremeSpecialMachineStateCodec.load(block, "robotic").isEmpty());
+    assertEquals(before, data);
+    assertEquals(0, writes);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"progress,-1", "ticks,-1", "progress,not-a-number", "aux_int,not-a-number"})
+  void invalidSpecializedNumbersAreRetainedForRecovery(String field, String value) {
+    SupremeSpecialMachineStateCodec.save(block, "robotic", 17, 31, inputs, outputs, reserved, -1, "");
+    data.put(SPECIAL + field, value);
+    Map<String, String> before = new LinkedHashMap<>(data);
+    writes = 0;
+    assertTrue(SupremeSpecialMachineStateCodec.load(block, "robotic").isEmpty());
+    assertEquals(before, data);
+    assertEquals(0, writes);
+  }
+
+  @Test
+  void partialReservedItemDecodeNeverReturnsAPartialSuccessfulState() {
+    SupremeMachineStateCodec.save(block, recipe(31), 17, 4, Map.of(reserved[0], 901));
+    data.put(GENERIC + "consumed", "901," + encoded(RESERVED_BYTES) + ";27,invalid-base64!");
+    Map<String, String> before = new LinkedHashMap<>(data);
+    writes = 0;
+    assertTrue(SupremeMachineStateCodec.load(block).isEmpty());
+    assertEquals(before, data);
+    assertEquals(0, writes);
+  }
+
+  @Test
+  void duplicateNormalizedTemplatesRetainBothQuantities() {
+    SupremeMachineStateCodec.save(block, recipe(31), 17, 4, Map.of(reserved[0], 901));
+    String payload = encoded(RESERVED_BYTES);
+    data.put(GENERIC + "consumed", "901," + payload + ";27," + payload);
+    assertEquals(Map.of(reservedTemplate, 928),
+        SupremeMachineStateCodec.load(block).orElseThrow().consumedItems());
+  }
+
+  @Test
+  void overflowingReservedQuantitiesAreNotSilentlyTruncated() {
+    SupremeMachineStateCodec.save(block, recipe(31), 17, 4, Map.of(reserved[0], 901));
+    String payload = encoded(RESERVED_BYTES);
+    data.put(GENERIC + "consumed", Integer.MAX_VALUE + "," + payload + ";1," + payload);
+    Map<String, String> before = new LinkedHashMap<>(data);
+    writes = 0;
+    assertTrue(SupremeMachineStateCodec.load(block).isEmpty());
+    assertEquals(before, data);
+    assertEquals(0, writes);
+  }
+
+  @Test
+  void unsupportedVersionIsStillRecognizedAsStoredData() {
+    data.put(GENERIC + "state_version", "future-version");
+    data.put(SPECIAL + "state_version", "future-version");
+    assertTrue(SupremeMachineStateCodec.hasStoredData(block));
+    assertTrue(SupremeSpecialMachineStateCodec.hasStoredData(block));
+    assertTrue(SupremeMachineStateCodec.load(block).isEmpty());
+    assertTrue(SupremeSpecialMachineStateCodec.load(block, "robotic").isEmpty());
+    assertEquals(0, writes);
   }
 
   private MachineRecipe recipe(int ticks) {

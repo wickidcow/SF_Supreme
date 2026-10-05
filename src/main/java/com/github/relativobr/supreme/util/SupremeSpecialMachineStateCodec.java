@@ -4,6 +4,7 @@ import com.github.relativobr.supreme.Supreme;
 import java.util.Base64;
 import java.util.Optional;
 import java.util.logging.Level;
+import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.MachineRecipe;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import org.bukkit.block.Block;
 import org.bukkit.inventory.ItemStack;
@@ -25,12 +26,19 @@ public final class SupremeSpecialMachineStateCodec {
   private static final String KEY_AUX_INT = "supreme_special_aux_int";
   private static final String KEY_AUX_TEXT = "supreme_special_aux_text";
   private static final String STATE_VERSION = "1";
+  private static final String[] KEYS = {KEY_VERSION, KEY_TYPE, KEY_PROGRESS, KEY_TICKS,
+      KEY_INPUTS, KEY_OUTPUTS, KEY_RESERVED, KEY_AUX_INT, KEY_AUX_TEXT};
 
   private SupremeSpecialMachineStateCodec() {
   }
 
   public record State(String type, int progress, int ticks, ItemStack[] inputs, ItemStack[] outputs,
                       ItemStack[] reservedItems, int auxInt, String auxText) {
+    public MachineRecipe recipe() {
+      MachineRecipe recipe = new MachineRecipe(0, inputs, outputs);
+      recipe.setTicks(ticks);
+      return recipe;
+    }
   }
 
   public static boolean hasState(Block block, String expectedType) {
@@ -39,6 +47,15 @@ public final class SupremeSpecialMachineStateCodec {
     }
     return STATE_VERSION.equals(BlockStorage.getLocationInfo(block.getLocation(), KEY_VERSION))
         && expectedType.equals(BlockStorage.getLocationInfo(block.getLocation(), KEY_TYPE));
+  }
+
+  /** Includes partial and unsupported records, which must never be mistaken for an idle machine. */
+  public static boolean hasStoredData(Block block) {
+    if (block == null) return false;
+    for (String key : KEYS) {
+      if (BlockStorage.getLocationInfo(block.getLocation(), key) != null) return true;
+    }
+    return false;
   }
 
   public static void save(Block block, String type, int progress, int ticks, ItemStack[] inputs,
@@ -87,15 +104,15 @@ public final class SupremeSpecialMachineStateCodec {
     }
 
     try {
-      int progress = parseInt(block, KEY_PROGRESS, 0);
-      int ticks = parseInt(block, KEY_TICKS, 0);
-      int auxInt = parseInt(block, KEY_AUX_INT, -1);
-      String auxText = BlockStorage.getLocationInfo(block.getLocation(), KEY_AUX_TEXT);
+      int progress = parseInt(block, KEY_PROGRESS);
+      int ticks = parseInt(block, KEY_TICKS);
+      int auxInt = parseInt(block, KEY_AUX_INT);
+      if (progress < 0 || ticks < 0) throw new IllegalArgumentException("negative checkpoint time");
+      String auxText = require(block, KEY_AUX_TEXT);
       return Optional.of(new State(expectedType, progress, ticks,
-          decodeItems(BlockStorage.getLocationInfo(block.getLocation(), KEY_INPUTS)),
-          decodeItems(BlockStorage.getLocationInfo(block.getLocation(), KEY_OUTPUTS)),
-          decodeItems(BlockStorage.getLocationInfo(block.getLocation(), KEY_RESERVED)),
-          auxInt, auxText == null ? "" : auxText));
+          decodeItems(require(block, KEY_INPUTS)),
+          decodeItems(require(block, KEY_OUTPUTS)),
+          decodeItems(require(block, KEY_RESERVED)), auxInt, auxText));
     } catch (RuntimeException ex) {
       Supreme.inst().log(Level.WARNING,
           "Could not restore specialized Supreme machine state at " + describe(block) + ": "
@@ -147,12 +164,14 @@ public final class SupremeSpecialMachineStateCodec {
     return ItemStack.deserializeItemsFromBytes(Base64.getDecoder().decode(stored));
   }
 
-  private static int parseInt(Block block, String key, int fallback) {
+  private static String require(Block block, String key) {
     String value = BlockStorage.getLocationInfo(block.getLocation(), key);
-    if (value == null || value.isBlank()) {
-      return fallback;
-    }
-    return Integer.parseInt(value);
+    if (value == null) throw new IllegalArgumentException("missing " + key);
+    return value;
+  }
+
+  private static int parseInt(Block block, String key) {
+    return Integer.parseInt(require(block, key));
   }
 
   private static String describe(Block block) {
