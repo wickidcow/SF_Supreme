@@ -48,13 +48,18 @@ public final class SupremeSpecialMachineStateCodec {
     }
 
     try {
+      // Finish serialization before replacing any part of the previous checkpoint.
+      String encodedInputs = encodeItems(inputs);
+      String encodedOutputs = encodeItems(outputs);
+      String encodedReserved = encodeItems(reservedItems);
+
       BlockStorage.addBlockInfo(block, KEY_VERSION, STATE_VERSION);
       BlockStorage.addBlockInfo(block, KEY_TYPE, type);
       BlockStorage.addBlockInfo(block, KEY_PROGRESS, Integer.toString(Math.max(0, progress)));
       BlockStorage.addBlockInfo(block, KEY_TICKS, Integer.toString(Math.max(0, ticks)));
-      BlockStorage.addBlockInfo(block, KEY_INPUTS, encodeItems(inputs));
-      BlockStorage.addBlockInfo(block, KEY_OUTPUTS, encodeItems(outputs));
-      BlockStorage.addBlockInfo(block, KEY_RESERVED, encodeItems(reservedItems));
+      BlockStorage.addBlockInfo(block, KEY_INPUTS, encodedInputs);
+      BlockStorage.addBlockInfo(block, KEY_OUTPUTS, encodedOutputs);
+      BlockStorage.addBlockInfo(block, KEY_RESERVED, encodedReserved);
       BlockStorage.addBlockInfo(block, KEY_AUX_INT, Integer.toString(auxInt));
       BlockStorage.addBlockInfo(block, KEY_AUX_TEXT, auxText == null ? "" : auxText);
     } catch (RuntimeException ex) {
