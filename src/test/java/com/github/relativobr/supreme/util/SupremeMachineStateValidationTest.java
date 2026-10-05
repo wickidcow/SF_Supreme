@@ -113,6 +113,14 @@ class SupremeMachineStateValidationTest {
     assertArrayEquals(s.outputs(), state.recipe().getOutput());
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"VIRTUAL_GARDEN", "VIRTUAL_AQUARIUM", "MOB_COLLECTOR", "TECH_ROBOTIC", "TECH_MUTATION"})
+  void progressBeyondTheSavedDurationIsBlocked(String type) {
+    var s = valid(type);
+    assertFalse(SupremeMachineStateValidation.isUsable(new SupremeSpecialMachineStateCodec.State(
+        type, 32, 31, s.inputs(), s.outputs(), s.reservedItems(), s.auxInt(), s.auxText()), INPUT_SLOTS));
+  }
+
   @Test
   void emptyAirAndNullItemsAreNotUsableOutputs() {
     assertFalse(SupremeMachineStateValidation.hasUsableItems(null));

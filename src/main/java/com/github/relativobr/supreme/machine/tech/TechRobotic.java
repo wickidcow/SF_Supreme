@@ -356,6 +356,7 @@ public class TechRobotic extends SimpleItemContainerMachine
   @Override
   public List<String> getMachineDiagnosticLines(Block block) {
     List<String> lines = new ArrayList<>();
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     BlockMenu inv = BlockStorage.getInventory(block);
     lines.add("Machine: " + getId() + " (TECH_ROBOTIC)");
     lines.add("Charge: " + getCharge(block.getLocation()) + " J | Consumption: "
@@ -365,7 +366,6 @@ public class TechRobotic extends SimpleItemContainerMachine
       return lines;
     }
 
-    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     restoreStateIfNeeded(block);
     if (addRecoveryDiagnosticLines(block, lines)) return lines;
     ItemStack output = processing.get(block);

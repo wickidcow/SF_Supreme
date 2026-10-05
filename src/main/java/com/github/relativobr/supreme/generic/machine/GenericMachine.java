@@ -411,7 +411,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     });
   }
 
-  /** Validates once per loaded lifecycle; transport never restores specialized live state. */
+  /** Validates once per runtime lifecycle; transport never restores specialized live state. */
   protected final boolean isRecoveryBlocked(Block block) {
     return recoveryGuard.isBlocked(block, this::isCheckpointReadable);
   }
@@ -448,7 +448,8 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return !SupremeSpecialMachineStateCodec.hasStoredData(block)
           && (!SupremeMachineStateCodec.hasStoredData(block)
           || SupremeMachineStateCodec.load(block)
-              .filter(state -> SupremeMachineStateValidation.hasUsableItems(state.recipe().getOutput())).isPresent());
+              .filter(state -> state.progress() <= state.recipe().getTicks()
+                  && SupremeMachineStateValidation.hasUsableItems(state.recipe().getOutput())).isPresent());
     }
     return !SupremeMachineStateCodec.hasStoredData(block)
         && (!SupremeSpecialMachineStateCodec.hasStoredData(block)
@@ -1415,13 +1416,13 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
    */
   public List<String> getMachineDiagnosticLines(Block block) {
     List<String> lines = new ArrayList<>();
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     BlockMenu inv = BlockStorage.getInventory(block);
     if (inv == null) {
       lines.add("No Slimefun inventory is loaded for this block.");
       return lines;
     }
 
-    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     restorePersistentStateIfNeeded(block, inv);
     if (addRecoveryDiagnosticLines(block, lines)) return lines;
     MachineRecipe recipe = getProcessing(block);

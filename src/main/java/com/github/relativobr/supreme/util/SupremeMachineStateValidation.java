@@ -19,7 +19,8 @@ public final class SupremeMachineStateValidation {
   public static boolean isUsable(SupremeSpecialMachineStateCodec.State state, int[] inputSlots) {
     if (state == null || state.type() == null) return false;
     if (state.inputs() == null || state.outputs() == null || state.reservedItems() == null) return false;
-    if (state.progress() < 0 || state.ticks() < 0 || !hasUsableItems(state.outputs())) return false;
+    if (state.progress() < 0 || state.ticks() < 0 || state.progress() > state.ticks()
+        || !hasUsableItems(state.outputs())) return false;
     return switch (state.type()) {
       case "VIRTUAL_GARDEN" -> hasUsableItems(state.inputs()) && state.reservedItems().length == 0;
       case "VIRTUAL_AQUARIUM" -> hasUsableItems(state.inputs()) && state.outputs().length == 1

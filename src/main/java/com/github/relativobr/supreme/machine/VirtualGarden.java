@@ -282,6 +282,7 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
   @Override
   public List<String> getMachineDiagnosticLines(Block block) {
     List<String> lines = new ArrayList<>();
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     BlockMenu inv = BlockStorage.getInventory(block);
     lines.add("Machine: " + getId() + " (VIRTUAL_GARDEN)");
     lines.add("Charge: " + getCharge(block.getLocation()) + " J | Consumption: "
@@ -291,7 +292,6 @@ public class VirtualGarden extends SimpleItemWithLargeContainerMachine
       return lines;
     }
 
-    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     restoreStateIfNeeded(block);
     if (addRecoveryDiagnosticLines(block, lines)) return lines;
     MachineRecipe active = processing.get(block);

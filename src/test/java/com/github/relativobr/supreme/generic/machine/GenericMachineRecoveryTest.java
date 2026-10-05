@@ -117,8 +117,10 @@ class GenericMachineRecoveryTest {
     verify(machine, never()).restoreCheckpointForBreak(any());
   }
 
-  @Test
-  void playerBreakIsCancelledBeforeInventoriesOrCheckpointAreCleared() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void playerBreakIsCancelledBeforeInventoriesOrCheckpointAreCleared(boolean hasInventory) {
+    if (!hasInventory) storage.when(() -> BlockStorage.getInventory(block)).thenReturn(null);
     Map<String, String> before = new LinkedHashMap<>(data);
     Player player = mock(Player.class);
     BlockBreakEvent event = new BlockBreakEvent(block, player);
@@ -144,8 +146,10 @@ class GenericMachineRecoveryTest {
     verifyNoInteractions(menu);
   }
 
-  @Test
-  void doctorReportsBlockedInsteadOfIdleWithoutDeletingTheRecord() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void doctorReportsBlockedInsteadOfIdleWithoutDeletingTheRecord(boolean hasInventory) {
+    if (!hasInventory) storage.when(() -> BlockStorage.getInventory(block)).thenReturn(null);
     List<String> lines = machine.getMachineDiagnosticLines(block);
     assertTrue(lines.contains(SupremeMachineRecoveryGuard.BLOCKED_MESSAGE));
     assertTrue(lines.stream().anyMatch(line -> line.contains("doctor retry")));
@@ -195,6 +199,14 @@ class GenericMachineRecoveryTest {
     assertEquals(before, data);
     assertEquals(0, writes);
     verifyNoInteractions(menu);
+  }
+
+  @Test
+  void progressBeyondTheSavedRecipeDurationIsBlocked() {
+    data.put(PREFIX + "consumed", "");
+    data.put(PREFIX + "progress", "32");
+    assertTrue(machine.isRecoveryBlocked(block));
+    assertEquals(0, writes);
   }
 
   @Test

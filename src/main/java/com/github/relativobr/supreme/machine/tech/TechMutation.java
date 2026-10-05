@@ -395,6 +395,7 @@ public class TechMutation extends SimpleItemContainerMachine
   @Override
   public List<String> getMachineDiagnosticLines(Block block) {
     List<String> lines = new ArrayList<>();
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     BlockMenu inv = BlockStorage.getInventory(block);
     lines.add("Machine: " + getId() + " (TECH_MUTATION)");
     lines.add("Charge: " + getCharge(block.getLocation()) + " J | Consumption: "
@@ -404,7 +405,6 @@ public class TechMutation extends SimpleItemContainerMachine
       return lines;
     }
 
-    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     restoreStateIfNeeded(block);
     if (addRecoveryDiagnosticLines(block, lines)) return lines;
     MutationCycle cycle = processing.get(block);
