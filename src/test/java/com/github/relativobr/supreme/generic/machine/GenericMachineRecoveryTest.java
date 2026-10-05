@@ -46,6 +46,7 @@ class GenericMachineRecoveryTest {
   private Block block;
   private BlockMenu menu;
   private GenericMachine machine;
+  private ItemStack transportedItem;
   private int writes;
 
   @BeforeEach
@@ -70,6 +71,7 @@ class GenericMachineRecoveryTest {
         });
     ItemStack[] inputs = {new ItemStack(Material.STONE, 32)};
     ItemStack[] outputs = {new ItemStack(Material.DIAMOND, 2)};
+    transportedItem = new ItemStack(Material.STONE);
     items = mockStatic(ItemStack.class);
     items.when(() -> ItemStack.deserializeItemsFromBytes(new byte[]{1})).thenReturn(inputs);
     items.when(() -> ItemStack.deserializeItemsFromBytes(new byte[]{2})).thenReturn(outputs);
@@ -110,7 +112,7 @@ class GenericMachineRecoveryTest {
     Method method = GenericMachine.class.getDeclaredMethod("getRecipeAwareInsertSlots",
         DirtyChestMenu.class, ItemStack.class);
     method.setAccessible(true);
-    int[] slots = (int[]) method.invoke(machine, menu, new ItemStack(Material.STONE));
+    int[] slots = (int[]) method.invoke(machine, menu, transportedItem);
     assertArrayEquals(new int[]{22}, slots);
     assertEquals(0, writes);
     verify(menu, never()).getItemInSlot(anyInt());

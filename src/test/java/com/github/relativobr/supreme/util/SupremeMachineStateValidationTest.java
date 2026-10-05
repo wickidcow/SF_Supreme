@@ -1,6 +1,7 @@
 package com.github.relativobr.supreme.util;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import java.util.Arrays;
 import org.bukkit.Material;
@@ -127,7 +128,11 @@ class SupremeMachineStateValidationTest {
     assertFalse(SupremeMachineStateValidation.hasUsableItems(new ItemStack[0]));
     assertFalse(SupremeMachineStateValidation.hasUsableItems(new ItemStack[]{null}));
     assertFalse(SupremeMachineStateValidation.hasUsableItems(new ItemStack[]{new ItemStack(Material.AIR)}));
-    assertFalse(SupremeMachineStateValidation.hasUsableItems(new ItemStack[]{new ItemStack(Material.STONE, 0)}));
+    // Paper rejects zero-amount construction, so model a damaged decoded stack at the boundary.
+    ItemStack empty = mock(ItemStack.class);
+    when(empty.getType()).thenReturn(Material.STONE);
+    when(empty.getAmount()).thenReturn(0);
+    assertFalse(SupremeMachineStateValidation.hasUsableItems(new ItemStack[]{empty}));
   }
 
   private static SupremeSpecialMachineStateCodec.State valid(String type) {
