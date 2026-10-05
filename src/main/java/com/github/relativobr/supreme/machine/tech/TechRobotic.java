@@ -169,7 +169,9 @@ public class TechRobotic extends SimpleItemContainerMachine
       return;
     }
 
+    if (isRecoveryBlocked(b)) return;
     restoreStateIfNeeded(b);
+    if (isRecoveryBlocked(b)) return;
     ItemStack itemProcess = processing.get(b);
     if (itemProcess == null) {
       long gameTime = b.getWorld().getGameTime();
@@ -276,7 +278,18 @@ public class TechRobotic extends SimpleItemContainerMachine
         new ItemStack[]{output.clone()}, new ItemStack[]{consumed.clone()}, -1, "");
   }
 
+  @Override
+  protected String getPersistentStateType() {
+    return STATE_TYPE;
+  }
+
+  @Override
+  protected void restoreCheckpointForBreak(Block block) {
+    restoreStateIfNeeded(block);
+  }
+
   private boolean restoreStateIfNeeded(Block block) {
+    if (isRecoveryBlocked(block)) return false;
     if (processing.containsKey(block)) {
       return true;
     }
@@ -284,41 +297,41 @@ public class TechRobotic extends SimpleItemContainerMachine
       return false;
     }
 
-    Optional<SupremeSpecialMachineStateCodec.State> restored =
-        SupremeSpecialMachineStateCodec.load(block, STATE_TYPE);
-    if (restored.isPresent()) {
-      SupremeSpecialMachineStateCodec.State state = restored.get();
-      if (state.outputs().length > 0 && state.outputs()[0] != null
-          && state.reservedItems().length > 0 && state.reservedItems()[0] != null) {
-        processing.put(block, state.outputs()[0].clone());
-        consumedInputs.put(block, state.reservedItems()[0].clone());
-        progressTime.put(block, Math.max(0, state.progress()));
-        lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
-        clearIdleBackoff(block);
-        return true;
+    try {
+      Optional<SupremeSpecialMachineStateCodec.State> restored =
+          SupremeSpecialMachineStateCodec.load(block, STATE_TYPE);
+      if (restored.isPresent()) {
+        SupremeSpecialMachineStateCodec.State state = restored.get();
+        if (isSpecialStateUsable(state)) {
+          processing.put(block, state.outputs()[0].clone());
+          consumedInputs.put(block, state.reservedItems()[0].clone());
+          progressTime.put(block, Math.max(0, state.progress()));
+          lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
+          clearIdleBackoff(block);
+          return true;
+        }
       }
+    } catch (RuntimeException ex) {
+      // Keep the original record and pause if preparing live state also fails.
     }
 
-    dropRecoveredInputs(block,
-        SupremeSpecialMachineStateCodec.loadReservedOnly(block, STATE_TYPE));
-    SupremeSpecialMachineStateCodec.clear(block);
+    blockRecovery(block);
     return false;
-  }
-
-  private void dropRecoveredInputs(Block block, ItemStack[] recovered) {
-    if (block.getWorld() == null || recovered == null) {
-      return;
-    }
-    for (ItemStack item : recovered) {
-      if (item != null && !item.getType().isAir() && item.getAmount() > 0) {
-        block.getWorld().dropItemNaturally(block.getLocation(), item.clone());
-      }
-    }
   }
 
   private void clearIdleBackoff(Block block) {
     nextIdleCheck.remove(block);
     lastIdleFingerprint.remove(block);
+  }
+
+  @Override
+  protected void resetRecoveryRuntime(Block block) {
+    super.resetRecoveryRuntime(block);
+    processing.remove(block);
+    progressTime.remove(block);
+    consumedInputs.remove(block);
+    lastProgressCheckpoint.remove(block);
+    clearIdleBackoff(block);
   }
 
   private void clearState(Block block) {
@@ -352,7 +365,9 @@ public class TechRobotic extends SimpleItemContainerMachine
       return lines;
     }
 
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     restoreStateIfNeeded(block);
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     ItemStack output = processing.get(block);
     if (output == null) {
       lines.add("State: IDLE / waiting for upgrade input");

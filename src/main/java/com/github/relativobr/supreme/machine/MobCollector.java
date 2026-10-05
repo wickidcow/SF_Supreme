@@ -342,7 +342,9 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
       return;
     }
 
+    if (isRecoveryBlocked(b)) return;
     restoreStateIfNeeded(b);
+    if (isRecoveryBlocked(b)) return;
     MachineRecipe active = processing.get(b);
     if (active == null) {
       long gameTime = b.getWorld().getGameTime();
@@ -451,7 +453,18 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
     }
   }
 
+  @Override
+  protected String getPersistentStateType() {
+    return STATE_TYPE;
+  }
+
+  @Override
+  protected void restoreCheckpointForBreak(Block block) {
+    restoreStateIfNeeded(block);
+  }
+
   private boolean restoreStateIfNeeded(Block block) {
+    if (isRecoveryBlocked(block)) return false;
     if (processing.containsKey(block)) {
       return true;
     }
@@ -459,23 +472,37 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
       return false;
     }
 
-    Optional<SupremeSpecialMachineStateCodec.State> restored =
-        SupremeSpecialMachineStateCodec.load(block, STATE_TYPE);
-    if (restored.isPresent()) {
-      SupremeSpecialMachineStateCodec.State state = restored.get();
-      if (state.inputs().length > 0 && state.outputs().length > 0 && state.auxInt() >= 0) {
-        MachineRecipe recipe = new MachineRecipe(state.ticks(), state.inputs(), state.outputs());
-        processing.put(block, recipe);
-        progress.put(block, Math.max(0, state.progress()));
-        selectedInputSlots.put(block, state.auxInt());
-        lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
-        nextIdleScan.remove(block);
-        return true;
+    try {
+      Optional<SupremeSpecialMachineStateCodec.State> restored =
+          SupremeSpecialMachineStateCodec.load(block, STATE_TYPE);
+      if (restored.isPresent()) {
+        SupremeSpecialMachineStateCodec.State state = restored.get();
+        if (isSpecialStateUsable(state)) {
+          MachineRecipe recipe = state.recipe();
+          processing.put(block, recipe);
+          progress.put(block, Math.max(0, state.progress()));
+          selectedInputSlots.put(block, state.auxInt());
+          lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
+          nextIdleScan.remove(block);
+          return true;
+        }
       }
+    } catch (RuntimeException ex) {
+      // Keep the original record and pause if preparing live state also fails.
     }
 
-    SupremeSpecialMachineStateCodec.clear(block);
+    blockRecovery(block);
     return false;
+  }
+
+  @Override
+  protected void resetRecoveryRuntime(Block block) {
+    super.resetRecoveryRuntime(block);
+    processing.remove(block);
+    progress.remove(block);
+    selectedInputSlots.remove(block);
+    lastProgressCheckpoint.remove(block);
+    nextIdleScan.remove(block);
   }
 
   private void clearCollectorState(Block block) {
@@ -504,7 +531,9 @@ public class MobCollector extends SimpleItemWithLargeContainerMachine
       return lines;
     }
 
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     restoreStateIfNeeded(block);
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     MachineRecipe active = processing.get(block);
     if (active == null) {
       lines.add("State: IDLE / waiting for valid tool and nearby mob");

@@ -38,6 +38,8 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
           + ChatColor.DARK_GRAY + " - audit Supreme machine recipes");
       sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor machine"
           + ChatColor.DARK_GRAY + " - inspect the Supreme machine you are looking at");
+      sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor retry"
+          + ChatColor.DARK_GRAY + " - re-read a blocked machine checkpoint after repair");
       return true;
     }
 
@@ -52,12 +54,16 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
         return true;
       }
       if (args[1].equalsIgnoreCase("machine")) {
-        runMachineDoctor(sender);
+        runMachineDoctor(sender, false);
+        return true;
+      }
+      if (args[1].equalsIgnoreCase("retry")) {
+        runMachineDoctor(sender, true);
         return true;
       }
     }
 
-    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " doctor <recipes|machine>");
+    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " doctor <recipes|machine|retry>");
     return true;
   }
 
@@ -90,7 +96,7 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
   }
 
   @SuppressWarnings("deprecation")
-  private void runMachineDoctor(CommandSender sender) {
+  private void runMachineDoctor(CommandSender sender, boolean retry) {
     if (!(sender instanceof Player player)) {
       sender.sendMessage(ChatColor.RED + "Machine Doctor must be run by a player looking at a block.");
       return;
@@ -103,6 +109,16 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
     }
 
     SlimefunItem item = BlockStorage.check(target);
+    if (retry) {
+      if (!(item instanceof GenericMachine machine)) {
+        sender.sendMessage(ChatColor.RED + "That block does not support Supreme checkpoint recovery.");
+        return;
+      }
+      boolean readable = machine.retryMachineRecovery(target);
+      sender.sendMessage(readable
+          ? ChatColor.GREEN + "Checkpoint is readable. Normal machine ticking can resume."
+          : ChatColor.RED + "Recovery remains blocked. The original checkpoint is still retained.");
+    }
     List<String> diagnosticLines;
     if (item instanceof SupremeMachineDiagnostics diagnostics) {
       diagnosticLines = diagnostics.getMachineDiagnosticLines(target);
@@ -131,6 +147,7 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
     } else if (args.length == 2 && args[0].equalsIgnoreCase("doctor")) {
       addIfMatches(options, "recipes", args[1]);
       addIfMatches(options, "machine", args[1]);
+      addIfMatches(options, "retry", args[1]);
     }
     return options;
   }

@@ -182,7 +182,9 @@ public class TechMutation extends SimpleItemContainerMachine
       return;
     }
 
+    if (isRecoveryBlocked(b)) return;
     restoreStateIfNeeded(b);
+    if (isRecoveryBlocked(b)) return;
     MutationCycle itemProcessing = processing.get(b);
     if (itemProcessing == null) {
       long gameTime = b.getWorld().getGameTime();
@@ -307,7 +309,18 @@ public class TechMutation extends SimpleItemContainerMachine
         new ItemStack[]{cycle.input1().clone(), cycle.input2().clone()}, cycle.chance(), result);
   }
 
+  @Override
+  protected String getPersistentStateType() {
+    return STATE_TYPE;
+  }
+
+  @Override
+  protected void restoreCheckpointForBreak(Block block) {
+    restoreStateIfNeeded(block);
+  }
+
   private boolean restoreStateIfNeeded(Block block) {
+    if (isRecoveryBlocked(block)) return false;
     if (processing.containsKey(block)) {
       return true;
     }
@@ -315,49 +328,48 @@ public class TechMutation extends SimpleItemContainerMachine
       return false;
     }
 
-    Optional<SupremeSpecialMachineStateCodec.State> restored =
-        SupremeSpecialMachineStateCodec.load(block, STATE_TYPE);
-    if (restored.isPresent()) {
-      SupremeSpecialMachineStateCodec.State state = restored.get();
-      if (state.outputs().length > 0 && state.outputs()[0] != null
-          && state.reservedItems().length >= 2
-          && state.reservedItems()[0] != null && state.reservedItems()[1] != null) {
-        MutationCycle cycle = new MutationCycle(state.reservedItems()[0].clone(),
-            state.reservedItems()[1].clone(), state.outputs()[0].clone(),
-            Math.max(0, state.auxInt()));
-        processing.put(block, cycle);
-        progressTime.put(block, Math.max(0, state.progress()));
-        lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
-        clearIdleBackoff(block);
-        if ("true".equalsIgnoreCase(state.auxText())) {
-          successfulMutations.put(block, true);
-        } else if ("false".equalsIgnoreCase(state.auxText())) {
-          successfulMutations.put(block, false);
+    try {
+      Optional<SupremeSpecialMachineStateCodec.State> restored =
+          SupremeSpecialMachineStateCodec.load(block, STATE_TYPE);
+      if (restored.isPresent()) {
+        SupremeSpecialMachineStateCodec.State state = restored.get();
+        if (isSpecialStateUsable(state)) {
+          MutationCycle cycle = new MutationCycle(state.reservedItems()[0].clone(),
+              state.reservedItems()[1].clone(), state.outputs()[0].clone(),
+              Math.max(0, state.auxInt()));
+          processing.put(block, cycle);
+          progressTime.put(block, Math.max(0, state.progress()));
+          lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
+          clearIdleBackoff(block);
+          if ("true".equalsIgnoreCase(state.auxText())) {
+            successfulMutations.put(block, true);
+          } else if ("false".equalsIgnoreCase(state.auxText())) {
+            successfulMutations.put(block, false);
+          }
+          return true;
         }
-        return true;
       }
+    } catch (RuntimeException ex) {
+      // Keep the original record and pause if preparing live state also fails.
     }
 
-    dropRecoveredInputs(block,
-        SupremeSpecialMachineStateCodec.loadReservedOnly(block, STATE_TYPE));
-    SupremeSpecialMachineStateCodec.clear(block);
+    blockRecovery(block);
     return false;
-  }
-
-  private void dropRecoveredInputs(Block block, ItemStack[] recovered) {
-    if (block.getWorld() == null || recovered == null) {
-      return;
-    }
-    for (ItemStack item : recovered) {
-      if (item != null && !item.getType().isAir() && item.getAmount() > 0) {
-        block.getWorld().dropItemNaturally(block.getLocation(), item.clone());
-      }
-    }
   }
 
   private void clearIdleBackoff(Block block) {
     nextIdleCheck.remove(block);
     lastIdleFingerprint.remove(block);
+  }
+
+  @Override
+  protected void resetRecoveryRuntime(Block block) {
+    super.resetRecoveryRuntime(block);
+    processing.remove(block);
+    progressTime.remove(block);
+    successfulMutations.remove(block);
+    lastProgressCheckpoint.remove(block);
+    clearIdleBackoff(block);
   }
 
   private void clearState(Block block) {
@@ -392,7 +404,9 @@ public class TechMutation extends SimpleItemContainerMachine
       return lines;
     }
 
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     restoreStateIfNeeded(block);
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     MutationCycle cycle = processing.get(block);
     if (cycle == null) {
       lines.add("State: IDLE / waiting for mutation inputs");

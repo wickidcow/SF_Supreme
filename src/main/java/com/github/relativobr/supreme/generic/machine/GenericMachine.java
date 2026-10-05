@@ -7,6 +7,10 @@ import com.github.relativobr.supreme.generic.recipe.AbstractItemRecipe;
 import com.github.relativobr.supreme.generic.recipe.InventoryRecipe;
 import com.github.relativobr.supreme.util.SupremeInventoryUtils;
 import com.github.relativobr.supreme.util.SupremeMachineStateCodec;
+import com.github.relativobr.supreme.util.SupremeMachineStateValidation;
+import com.github.relativobr.supreme.util.SupremeSpecialMachineStateCodec;
+import com.github.relativobr.supreme.util.SupremeMachineRecoveryGuard;
+import com.github.relativobr.supreme.util.SupremeMachineBreakHandler;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -15,7 +19,6 @@ import io.github.thebusybiscuit.slimefun4.core.attributes.NotHopperable;
 import io.github.thebusybiscuit.slimefun4.core.attributes.RecipeDisplayItem;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockBreakHandler;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
-import io.github.thebusybiscuit.slimefun4.implementation.handlers.SimpleBlockBreakHandler;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.protection.Interaction;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
@@ -65,6 +68,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
 
   // AContainer ticks asynchronously on Paper/Purpur, while transport and block-break paths may
   // inspect or clear the same placed-machine state from another server-owned thread.
+  private final SupremeMachineRecoveryGuard recoveryGuard = new SupremeMachineRecoveryGuard();
   private final Map<Block, MachineRecipe> processing = new ConcurrentHashMap<>();
   /*
    * Running machines update progress every ticker pass. Keep remaining progress and checkpoint
@@ -183,6 +187,10 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return new int[0];
     }
 
+    if (menu instanceof BlockMenu blockMenu && isRecoveryBlocked(blockMenu.getBlock())) {
+      return new int[]{getStatusSlot()};
+    }
+
     if (machineRecipes.isEmpty()) {
       return getInputSlots();
     }
@@ -193,6 +201,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
     if (menu instanceof BlockMenu blockMenu) {
       Block block = blockMenu.getBlock();
       restorePersistentStateIfNeeded(block, blockMenu);
+      if (isRecoveryBlocked(block)) return new int[]{getStatusSlot()};
       MachineRecipe activeRecipe = getProcessing(block);
       if (activeRecipe != null) {
         if (isRollbackPending(block)) {
@@ -379,29 +388,86 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   @Nonnull
   @Override
   protected BlockBreakHandler onBlockBreak() {
-    return new SimpleBlockBreakHandler() {
-      @Override
-      public void onBlockBreak(Block b) {
-        BlockMenu inv = BlockStorage.getInventory(b);
-        if (inv != null) {
-          restorePersistentStateIfNeeded(b, inv);
-          if (!revertConsumedItem(b, inv)) {
-            // A deliberate block break is allowed to spill only the still-hidden remainder. Normal
-            // machine rollback never uses this path and instead waits for inventory room.
-            dropConsumedItems(b);
-          }
-          inv.dropItems(b.getLocation(), getInputSlots());
-          inv.dropItems(b.getLocation(), getOutputSlots());
-        } else {
-          if (!consumedItemsMap.containsKey(b) && SupremeMachineStateCodec.hasState(b)) {
-            consumedItemsMap.put(b, SupremeMachineStateCodec.loadConsumedOnly(b));
-          }
+    return new SupremeMachineBreakHandler(this::isBreakRecoveryBlocked, b -> {
+      BlockMenu inv = BlockStorage.getInventory(b);
+      if (inv != null) {
+        restorePersistentStateIfNeeded(b, inv);
+        if (!revertConsumedItem(b, inv)) {
+          // A deliberate block break is allowed to spill only the still-hidden remainder. Normal
+          // machine rollback never uses this path and instead waits for inventory room.
           dropConsumedItems(b);
         }
-        onMachineBreak(b);
-        removeMapBlock(b);
+        inv.dropItems(b.getLocation(), getInputSlots());
+        inv.dropItems(b.getLocation(), getOutputSlots());
+      } else {
+        if (!consumedItemsMap.containsKey(b) && SupremeMachineStateCodec.hasState(b)) {
+          consumedItemsMap.put(b, SupremeMachineStateCodec.loadConsumedOnly(b));
+        }
+        dropConsumedItems(b);
       }
-    };
+      onMachineBreak(b);
+      removeMapBlock(b);
+      recoveryGuard.forget(b);
+    });
+  }
+
+  /** Validates once per loaded lifecycle; transport never restores specialized live state. */
+  protected final boolean isRecoveryBlocked(Block block) {
+    return recoveryGuard.isBlocked(block, this::isCheckpointReadable);
+  }
+
+  protected final void blockRecovery(Block block) {
+    recoveryGuard.block(block);
+  }
+
+  /** Explicit operator retry only re-reads the checkpoint; normal ticking restores valid state. */
+  public final boolean retryMachineRecovery(Block block) {
+    if (!isRecoveryBlocked(block)) return true;
+    resetRecoveryRuntime(block);
+    return recoveryGuard.retry(block, this::isCheckpointReadable);
+  }
+
+  protected final boolean addRecoveryDiagnosticLines(Block block, List<String> lines) {
+    if (!isRecoveryBlocked(block)) return false;
+    lines.add(SupremeMachineRecoveryGuard.BLOCKED_MESSAGE);
+    lines.add(SupremeMachineRecoveryGuard.RECOVERY_HELP);
+    return true;
+  }
+
+  protected String getPersistentStateType() {
+    return null;
+  }
+
+  protected final boolean isSpecialStateUsable(SupremeSpecialMachineStateCodec.State state) {
+    return SupremeMachineStateValidation.isUsable(state, getInputSlots());
+  }
+
+  protected final boolean isCheckpointReadable(Block block) {
+    String type = getPersistentStateType();
+    if (type == null) {
+      return !SupremeSpecialMachineStateCodec.hasStoredData(block)
+          && (!SupremeMachineStateCodec.hasStoredData(block)
+          || SupremeMachineStateCodec.load(block)
+              .filter(state -> SupremeMachineStateValidation.hasUsableItems(state.recipe().getOutput())).isPresent());
+    }
+    return !SupremeMachineStateCodec.hasStoredData(block)
+        && (!SupremeSpecialMachineStateCodec.hasStoredData(block)
+        || SupremeSpecialMachineStateCodec.load(block, type)
+            .filter(this::isSpecialStateUsable).isPresent());
+  }
+
+  private boolean isBreakRecoveryBlocked(Block block) {
+    if (isRecoveryBlocked(block)) return true;
+    try {
+      restoreCheckpointForBreak(block);
+    } catch (RuntimeException ex) {
+      blockRecovery(block);
+    }
+    return isRecoveryBlocked(block);
+  }
+
+  protected void restoreCheckpointForBreak(Block block) {
+    restorePersistentStateIfNeeded(block, BlockStorage.getInventory(block));
   }
 
   /** Allows special machines to clear their own per-block state. */
@@ -603,7 +669,9 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return;
     }
 
+    if (isRecoveryBlocked(b)) return;
     restorePersistentStateIfNeeded(b, inv);
+    if (isRecoveryBlocked(b)) return;
 
     long gameTime = b.getWorld().getGameTime();
     if (gameTime < heavyCheckAfter.getOrDefault(b, 0L)) {
@@ -739,6 +807,17 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       }
       backoff(b);
     }
+  }
+
+  /** Discards only a failed restore's runtime cache before an explicit retry. */
+  protected void resetRecoveryRuntime(Block b) {
+    progressState.remove(b);
+    processing.remove(b);
+    attemptCount.remove(b);
+    consumedItemsMap.remove(b);
+    heavyCheckAfter.remove(b);
+    clearIdleRecipeBackoff(b);
+    activeRequiredItems.remove(b);
   }
 
   protected final void removeMapBlock(Block b) {
@@ -1292,6 +1371,7 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
   }
 
   private boolean restorePersistentStateIfNeeded(Block b, BlockMenu inv) {
+    if (isRecoveryBlocked(b)) return false;
     if (processing.containsKey(b)) {
       return true;
     }
@@ -1299,29 +1379,26 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return false;
     }
 
-    Optional<SupremeMachineStateCodec.State> restored = SupremeMachineStateCodec.load(b);
-    if (restored.isPresent()) {
-      SupremeMachineStateCodec.State state = restored.get();
-      processing.put(b, state.recipe());
-      Map<ItemStack, Integer> requiredItems = groupSimilarItems(state.recipe().getInput());
-      activeRequiredItems.put(b, requiredItems);
-      int restoredProgress = Math.max(0, state.progress());
-      progressState.put(b, new ProgressState(restoredProgress, restoredProgress));
-      attemptCount.put(b, Math.max(0, state.attempts()));
-      consumedItemsMap.put(b, canonicalizeConsumedItems(requiredItems, state.consumedItems()));
-      heavyCheckAfter.remove(b);
-      return true;
+    try {
+      Optional<SupremeMachineStateCodec.State> restored = SupremeMachineStateCodec.load(b);
+      if (restored.isPresent()) {
+        SupremeMachineStateCodec.State state = restored.get();
+        processing.put(b, state.recipe());
+        Map<ItemStack, Integer> requiredItems = groupSimilarItems(state.recipe().getInput());
+        activeRequiredItems.put(b, requiredItems);
+        int restoredProgress = Math.max(0, state.progress());
+        progressState.put(b, new ProgressState(restoredProgress, restoredProgress));
+        attemptCount.put(b, Math.max(0, state.attempts()));
+        consumedItemsMap.put(b, canonicalizeConsumedItems(requiredItems, state.consumedItems()));
+        heavyCheckAfter.remove(b);
+        return true;
+      }
+    } catch (RuntimeException ex) {
+      // Keep the original record and pause if preparing live state also fails.
     }
 
-    // If the recipe payload was damaged but the reserved-item payload is still readable, return
-    // those items immediately rather than silently discarding them. A corrupt recipe cannot remain
-    // pending, so only this recovery path is allowed to spill an unreturnable remainder safely.
-    Map<ItemStack, Integer> recoverable = SupremeMachineStateCodec.loadConsumedOnly(b);
-    if (!recoverable.isEmpty()) {
-      Map<ItemStack, Integer> leftovers = returnConsumedMap(inv, recoverable);
-      dropItemMapSafely(b, leftovers);
-    }
-    SupremeMachineStateCodec.clear(b);
+    // A failed decode is not an empty reservation. Retain the entire original record.
+    recoveryGuard.block(b);
     return false;
   }
 
@@ -1344,7 +1421,9 @@ public class GenericMachine extends AContainer implements NotHopperable, RecipeD
       return lines;
     }
 
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     restorePersistentStateIfNeeded(block, inv);
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
     MachineRecipe recipe = getProcessing(block);
     lines.add("Machine: " + getId() + " (" + getMachineIdentifier() + ")");
     lines.add("Charge: " + getCharge(block.getLocation()) + " J | Consumption: "

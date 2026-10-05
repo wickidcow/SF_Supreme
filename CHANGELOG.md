@@ -1,5 +1,14 @@
 # Changelog
 
+## Supreme Legacy 1.0.19
+
+- Pause machines with incomplete, unsupported or unreadable checkpoints while retaining the original stored fields. Generic machines, Virtual Garden, Virtual Aquarium, Mob Collector, Tech Robotic and Tech Mutation use the same recovery guard.
+- Block normal Slimefun player breaks, Android mining, explosions and item-aware automated insertion while recovery is blocked. Repeated ticks do not consume inputs, spend energy, produce outputs or repeatedly decode the bad record.
+- `/supreme doctor machine` reports the blocked state. The admin-only `/supreme doctor retry` re-reads the original record after an operator repairs it or restores a backup; it does not erase the record or generate replacement items.
+- Require all version-1 checkpoint fields, preserve duplicate normalized reserved-item quantities by adding them exactly, and reject malformed or overflowing reservation payloads as unreadable.
+- Restore specialized recipe durations in their stored tick units, including odd durations. Existing item bytes, IDs, saved field names and valid machine behavior remain unchanged.
+
+
 ## Supreme Legacy 1.0.18
 
 - Serialize all recipe and reserved-item data before changing either generic or specialized machine checkpoints. A serialization failure now leaves the previous stored record untouched.
