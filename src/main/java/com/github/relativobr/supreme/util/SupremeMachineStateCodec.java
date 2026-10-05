@@ -51,6 +51,8 @@ public final class SupremeMachineStateCodec {
       Base64.Encoder encoder = Base64.getEncoder();
       String input = encoder.encodeToString(ItemStack.serializeItemsAsBytes(recipe.getInput()));
       String output = encoder.encodeToString(ItemStack.serializeItemsAsBytes(recipe.getOutput()));
+      // Finish serialization before replacing any part of the previous checkpoint.
+      String consumed = encodeConsumed(consumedItems, encoder);
 
       BlockStorage.addBlockInfo(block, KEY_VERSION, STATE_VERSION);
       BlockStorage.addBlockInfo(block, KEY_INPUT, input);
@@ -58,7 +60,7 @@ public final class SupremeMachineStateCodec {
       BlockStorage.addBlockInfo(block, KEY_TICKS, Integer.toString(recipe.getTicks()));
       BlockStorage.addBlockInfo(block, KEY_PROGRESS, Integer.toString(Math.max(progress, 0)));
       BlockStorage.addBlockInfo(block, KEY_ATTEMPTS, Integer.toString(Math.max(attempts, 0)));
-      BlockStorage.addBlockInfo(block, KEY_CONSUMED, encodeConsumed(consumedItems, encoder));
+      BlockStorage.addBlockInfo(block, KEY_CONSUMED, consumed);
     } catch (RuntimeException ex) {
       Supreme.inst().log(Level.WARNING,
           "Could not persist Supreme machine state at " + describe(block) + ": " + ex.getMessage());
@@ -98,7 +100,9 @@ public final class SupremeMachineStateCodec {
         throw new IllegalArgumentException("recipe arrays are empty");
       }
 
-      MachineRecipe recipe = new MachineRecipe(ticks, input, output);
+      // MachineRecipe's constructor accepts seconds; the saved field already contains ticks.
+      MachineRecipe recipe = new MachineRecipe(0, input, output);
+      recipe.setTicks(ticks);
       Map<ItemStack, Integer> consumed = decodeConsumed(
           BlockStorage.getLocationInfo(block.getLocation(), KEY_CONSUMED), decoder);
       return Optional.of(new State(recipe, progress, attempts, consumed));

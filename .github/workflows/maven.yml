@@ -11,8 +11,8 @@ permissions:
   contents: write
 
 env:
-  VERSION: "1.0.17"
-  OUTPUT_NAME: "SF_Supreme1.0.17.jar"
+  VERSION: "1.0.18"
+  OUTPUT_NAME: "SF_Supreme1.0.18.jar"
 
 jobs:
   build:
@@ -54,6 +54,13 @@ jobs:
           ./gradlew publishToMavenLocal -x test -PprojectVersion=Legacy-SNAPSHOT
       - name: Build Supreme against Slimefun Legacy
         run: mvn -B -Plegacy clean verify
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: supreme-test-reports
+          path: target/surefire-reports/
+          if-no-files-found: ignore
       - name: Stage canonical JAR
         shell: bash
         run: |
@@ -64,6 +71,10 @@ jobs:
           PLUGIN_VERSION=$(unzip -p "$JAR" plugin.yml | awk -F': *' '/^version:/ {gsub(/["'"'"']/,"",$2); print $2; exit}')
           test "$PLUGIN_VERSION" = "$VERSION"
           if printf '%s\n' "$PLUGIN_VERSION" | grep -Eiq '(legacy|english|snapshot)'; then exit 1; fi
+          if unzip -Z1 "$JAR" | grep -Eq '^(org/mockito/|org/junit/|org/mockbukkit/)'; then
+            echo "Test dependencies must not be packaged in the release JAR." >&2
+            exit 1
+          fi
           cp "$JAR" "dist/${OUTPUT_NAME}"
           sha256sum "dist/${OUTPUT_NAME}"
       - name: Upload canonical raw JAR artifact
@@ -73,23 +84,6 @@ jobs:
           path: dist/${{ env.OUTPUT_NAME }}
           archive: false
           if-no-files-found: error
-      - name: Publish canonical raw JAR release asset
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || github.ref_name == github.event.repository.default_branch
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${VERSION}"; fi
-          JAR="dist/${OUTPUT_NAME}"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            while IFS= read -r OLD; do
-              if [[ "$OLD" == *.jar && "$OLD" != "$OUTPUT_NAME" ]]; then gh release delete-asset "$TAG" "$OLD" --repo "$GITHUB_REPOSITORY" -y; fi
-            done < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
-            gh release upload "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --clobber
-          else
-            gh release create "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "SF_Supreme ${VERSION}" --notes "Supreme ${VERSION}: canonical ${OUTPUT_NAME} release."
-          fi
 
   compatibility-paper:
     name: compatibility-paper (${{ matrix.api-line }})
@@ -169,3 +163,30 @@ jobs:
           mvn -B org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file -Dfile="$UNITED_JAR" -DgroupId=io.github.slimefun_united -DartifactId=slimefun-united -Dversion=4.10-CI -Dpackaging=jar -DgeneratePom=true
       - name: Compile Supreme against Slimefun United
         run: mvn -B -Punited -Dslimefun.version=4.10-CI -DskipTests clean package
+
+  release:
+    needs: [build, compatibility-paper, compatibility-gugu, compatibility-united]
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download validated canonical JAR
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.OUTPUT_NAME }}
+          path: dist
+      - name: Publish canonical raw JAR release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${VERSION}"; fi
+          JAR="dist/${OUTPUT_NAME}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            while IFS= read -r OLD; do
+              if [[ "$OLD" == *.jar && "$OLD" != "$OUTPUT_NAME" ]]; then gh release delete-asset "$TAG" "$OLD" --repo "$GITHUB_REPOSITORY" -y; fi
+            done < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+            gh release upload "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "SF_Supreme ${VERSION}" --notes "Supreme ${VERSION}: canonical ${OUTPUT_NAME} release."
+          fi

@@ -1,5 +1,13 @@
 # Changelog
 
+## Supreme Legacy 1.0.18
+
+- Serialize all recipe and reserved-item data before changing either generic or specialized machine checkpoints. A serialization failure now leaves the previous stored record untouched.
+- Restore generic recipe durations in their stored tick units instead of doubling them through the seconds-based recipe constructor.
+- Preserve version-1 field names, item byte payloads, staged quantities and specialized machine results. This does not make separate BlockStorage writes a disk transaction.
+- Include the previously merged quarry selection optimization and preservation of existing rich gear lore when appending Supreme effects.
+- Add injected serialization-failure and checkpoint round-trip tests; gate release publication on the full compatibility matrix.
+
 ## Supreme Legacy 1.0.17
 
 ### Tech Generator MobTech Effects
