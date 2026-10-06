@@ -196,6 +196,15 @@ for machine in "$JAVA/machine/tech/TechRobotic.java" "$JAVA/machine/tech/TechMut
     exit 1
   fi
 done
+# Tech engines must snapshot supplied items and pre-encode before consumption.
+for machine in "$JAVA/machine/tech/TechRobotic.java" "$JAVA/machine/tech/TechMutation.java"; do
+  grep -q 'SupremeTechInputReservation.tryReserve' "$machine"
+  grep -q 'SupremeSpecialMachineStateCodec.savePrepared' "$machine"
+  if grep -q 'inv.consumeItem' "$machine"; then
+    echo "Tech inputs must be consumed through the serialization-safe reservation boundary." >&2
+    exit 1
+  fi
+done
 grep -q 'saveAuxText' "$JAVA/machine/tech/TechMutation.java"
 
 grep -q 'commitAquariumTool' "$JAVA/machine/VirtualAquarium.java"

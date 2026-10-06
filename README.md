@@ -56,6 +56,8 @@ A machine with an unreadable, incomplete or unsupported checkpoint pauses with `
 
 After correcting the underlying data or restoring a known-good checkpoint from backup, look at the machine and run `/supreme doctor retry` with `supreme.admin`. Retry validates the record again without deleting or rewriting it; a valid record can resume through normal ticking. Restarting also starts a fresh validation lifecycle. If the data is still unreadable, the machine stays blocked. There is no automatic reset, partial-item payout or replacement with fresh item templates.
 
+Tech Robotic and Tech Mutation also prepare a complete serialized checkpoint before consuming inputs. Their reservations retain copies of the items you supplied, including custom names, rich lore and persistent metadata. If preparation fails or a slot changes before consumption, the cycle does not start. Existing saved reservations are restored as stored; metadata discarded by an older version cannot be reconstructed.
+
 The guard uses the existing version-1 storage format. It protects Supreme's normal machine and Slimefun break paths; it is not a backup system or a transaction around external tools that directly delete or replace block records. Tests distinguish recording-storage/MockBukkit evidence from real-server startup and restart smoke checks.
 
 ## ❤️ Credits & project lineage

@@ -12,6 +12,7 @@ import com.github.relativobr.supreme.util.ItemGroups;
 import com.github.relativobr.supreme.util.SupremeInventoryUtils;
 import com.github.relativobr.supreme.util.SupremeItemStack;
 import com.github.relativobr.supreme.util.SupremeSpecialMachineStateCodec;
+import com.github.relativobr.supreme.util.SupremeTechInputReservation;
 import com.github.relativobr.supreme.util.UtilEnergy;
 import com.github.relativobr.supreme.util.UtilMachine;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -209,21 +210,22 @@ public class TechMutation extends SimpleItemContainerMachine
         return;
       }
 
-      ItemStack input1 = itemRecipe.getInput1().clone();
-      ItemStack input2 = itemRecipe.getInput2().clone();
-      input1.setAmount(1);
-      input2.setAmount(1);
-      inv.consumeItem(getInputSlots()[0], 1);
-      inv.consumeItem(getInputSlots()[1], 1);
-
-      MutationCycle cycle = new MutationCycle(input1, input2, output,
-          Math.min(100, itemRecipe.getChance() * getUpgradeLuck()));
-      processing.put(b, cycle);
       int ticks = getTimeProcess() * 2;
+      int chance = Math.min(100, itemRecipe.getChance() * getUpgradeLuck());
+      var reservation = SupremeTechInputReservation.tryReserve(b, inv, getInputSlots(),
+          new int[]{1, 1}, new ItemStack[]{itemRecipe.getInput1(), itemRecipe.getInput2()}, false,
+          STATE_TYPE, output, ticks, chance);
+      if (reservation.isEmpty()) {
+        invalidProgressBar(inv, "&cCannot reserve inputs safely");
+        return;
+      }
+      ItemStack[] reserved = reservation.get().items();
+      MutationCycle cycle = new MutationCycle(reserved[0], reserved[1], output, chance);
+      processing.put(b, cycle);
       progressTime.put(b, ticks);
       lastProgressCheckpoint.put(b, ticks);
       successfulMutations.remove(b);
-      persistState(b, cycle, ticks, "");
+      SupremeSpecialMachineStateCodec.savePrepared(b, reservation.get().checkpoint());
       invalidProgressBar(inv, output.getType(), " ");
       return;
     }
@@ -301,12 +303,6 @@ public class TechMutation extends SimpleItemContainerMachine
       }
     }
     return null;
-  }
-
-  private void persistState(Block block, MutationCycle cycle, int ticks, String result) {
-    SupremeSpecialMachineStateCodec.save(block, STATE_TYPE, ticks, ticks,
-        new ItemStack[0], new ItemStack[]{cycle.output().clone()},
-        new ItemStack[]{cycle.input1().clone(), cycle.input2().clone()}, cycle.chance(), result);
   }
 
   @Override

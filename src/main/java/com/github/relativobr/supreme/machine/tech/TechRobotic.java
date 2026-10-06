@@ -13,6 +13,7 @@ import com.github.relativobr.supreme.util.ItemGroups;
 import com.github.relativobr.supreme.util.SupremeInventoryUtils;
 import com.github.relativobr.supreme.util.SupremeItemStack;
 import com.github.relativobr.supreme.util.SupremeSpecialMachineStateCodec;
+import com.github.relativobr.supreme.util.SupremeTechInputReservation;
 import com.github.relativobr.supreme.util.UtilEnergy;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -196,15 +197,19 @@ public class TechRobotic extends SimpleItemContainerMachine
         return;
       }
 
-      ItemStack consumed = recipe.getFirstItemInput().clone();
-      consumed.setAmount(getAmountUpgrade());
-      inv.consumeItem(getInputSlots()[0], getAmountUpgrade());
-      consumedInputs.put(b, consumed);
-      processing.put(b, output);
       int ticks = getTimeProcess() * 2;
+      var reservation = SupremeTechInputReservation.tryReserve(b, inv, getInputSlots(),
+          new int[]{getAmountUpgrade()}, new ItemStack[]{recipe.getFirstItemInput()}, true,
+          STATE_TYPE, output, ticks, -1);
+      if (reservation.isEmpty()) {
+        invalidProgressBar(inv, "&cCannot reserve inputs safely");
+        return;
+      }
+      consumedInputs.put(b, reservation.get().items()[0]);
+      processing.put(b, output);
       progressTime.put(b, ticks);
       lastProgressCheckpoint.put(b, ticks);
-      persistState(b, output, consumed, ticks);
+      SupremeSpecialMachineStateCodec.savePrepared(b, reservation.get().checkpoint());
       invalidProgressBar(inv, output.getType(), " ");
       return;
     }
@@ -271,11 +276,6 @@ public class TechRobotic extends SimpleItemContainerMachine
       }
     }
     return null;
-  }
-
-  private void persistState(Block block, ItemStack output, ItemStack consumed, int ticks) {
-    SupremeSpecialMachineStateCodec.save(block, STATE_TYPE, ticks, ticks, new ItemStack[0],
-        new ItemStack[]{output.clone()}, new ItemStack[]{consumed.clone()}, -1, "");
   }
 
   @Override
