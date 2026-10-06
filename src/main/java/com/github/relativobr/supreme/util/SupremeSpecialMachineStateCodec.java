@@ -65,25 +65,47 @@ public final class SupremeSpecialMachineStateCodec {
     }
 
     try {
-      // Finish serialization before replacing any part of the previous checkpoint.
-      String encodedInputs = encodeItems(inputs);
-      String encodedOutputs = encodeItems(outputs);
-      String encodedReserved = encodeItems(reservedItems);
-
-      BlockStorage.addBlockInfo(block, KEY_VERSION, STATE_VERSION);
-      BlockStorage.addBlockInfo(block, KEY_TYPE, type);
-      BlockStorage.addBlockInfo(block, KEY_PROGRESS, Integer.toString(Math.max(0, progress)));
-      BlockStorage.addBlockInfo(block, KEY_TICKS, Integer.toString(Math.max(0, ticks)));
-      BlockStorage.addBlockInfo(block, KEY_INPUTS, encodedInputs);
-      BlockStorage.addBlockInfo(block, KEY_OUTPUTS, encodedOutputs);
-      BlockStorage.addBlockInfo(block, KEY_RESERVED, encodedReserved);
-      BlockStorage.addBlockInfo(block, KEY_AUX_INT, Integer.toString(auxInt));
-      BlockStorage.addBlockInfo(block, KEY_AUX_TEXT, auxText == null ? "" : auxText);
+      savePrepared(block, prepare(type, progress, ticks, inputs, outputs, reservedItems, auxInt, auxText));
     } catch (RuntimeException ex) {
-      Supreme.inst().log(Level.WARNING,
-          "Could not persist specialized Supreme machine state at " + describe(block) + ": "
-              + ex.getMessage());
+      logSaveFailure(block, ex);
     }
+  }
+
+  /** Immutable encoded fields. Preparing a checkpoint never changes BlockStorage. */
+  public static final class PreparedState {
+    private final String[] values;
+
+    private PreparedState(String[] values) {
+      this.values = values;
+    }
+  }
+
+  /** Finish all serialization before a caller consumes inputs or changes live processing state. */
+  public static PreparedState prepare(String type, int progress, int ticks, ItemStack[] inputs,
+      ItemStack[] outputs, ItemStack[] reservedItems, int auxInt, String auxText) {
+    if (type == null || type.isBlank()) throw new IllegalArgumentException("missing machine type");
+    return new PreparedState(new String[]{STATE_VERSION, type,
+        Integer.toString(Math.max(0, progress)), Integer.toString(Math.max(0, ticks)),
+        encodeItems(inputs), encodeItems(outputs), encodeItems(reservedItems),
+        Integer.toString(auxInt), auxText == null ? "" : auxText});
+  }
+
+  /** Writes already encoded fields using the existing version-1 format and field order. */
+  public static void savePrepared(Block block, PreparedState state) {
+    if (block == null || state == null) return;
+    try {
+      for (int i = 0; i < KEYS.length; i++) {
+        BlockStorage.addBlockInfo(block, KEYS[i], state.values[i]);
+      }
+    } catch (RuntimeException ex) {
+      logSaveFailure(block, ex);
+    }
+  }
+
+  private static void logSaveFailure(Block block, RuntimeException ex) {
+    Supreme.inst().log(Level.WARNING,
+        "Could not persist specialized Supreme machine state at " + describe(block) + ": "
+            + ex.getMessage());
   }
 
   public static void saveProgress(Block block, String expectedType, int progress) {

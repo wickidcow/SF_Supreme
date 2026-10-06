@@ -1,5 +1,12 @@
 # Changelog
 
+## Supreme Legacy 1.0.20
+
+- Tech Robotic and Tech Mutation reserve copies of the supplied input stacks, preserving their names, rich lore and typed persistent metadata for checkpoint recovery and deliberate-break refunds. Recipe templates still determine matching and newly produced outputs.
+- Complete checkpoint serialization before either engine consumes an input. A serialization failure or input change during preparation leaves the reservation unstarted and does not consume other slots.
+- Reuse the prepared version-1 checkpoint without serializing already-consumed ingredients again. Existing recipes, upgrade quantities, mutation chance/result rules, speeds, energy costs and field keys remain unchanged.
+- Add reservation-boundary tests for all three robotic quantities, both mutation inputs, metadata preservation, serializer failures and input changes. Inventory and BlockStorage writes remain separate; this is not a disk transaction or historical-world migration guarantee.
+
 ## Supreme Legacy 1.0.19
 
 - Pause machines with incomplete, unsupported or unreadable checkpoints while retaining the original stored fields. Generic machines, Virtual Garden, Virtual Aquarium, Mob Collector, Tech Robotic and Tech Mutation use the same recovery guard.

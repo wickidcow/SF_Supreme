@@ -153,92 +153,285 @@ fi
 # the owning Paper region before creating an item entity.
 INVENTORY_UTIL="$JAVA/util/SupremeInventoryUtils.java"
 grep -q 'static int fingerprint' "$INVENTORY_UTIL"
-grep -q 'dropItemNaturallySafe(menu.getLocation(), leftover)' "$INVENTORY_UTIL"
-grep -q 'Bukkit.getRegionScheduler().execute' "$INVENTORY_UTIL"
-if awk '/public static void pushAll/,/^  }/' "$INVENTORY_UTIL" | grep -q '\.dropItemNaturally('; then
-  echo "SupremeInventoryUtils.pushAll must not create item entities directly from a machine ticker." >&2
-  exit 1
-fi
+grep -q 'dropItemNaturallySafe(menu.getLocation(), …3920 tokens truncated…ll");
+        return;
+      }
 
-# Specialized synchronized machines must avoid repeated idle recipe scans while still waking
-# immediately when relevant inventory contents change.
-for machine in \
-  "$JAVA/machine/VirtualGarden.java" \
-  "$JAVA/machine/VirtualAquarium.java" \
-  "$JAVA/machine/tech/TechMutation.java" \
-  "$JAVA/machine/tech/TechRobotic.java"; do
-  grep -q 'IDLE_RETRY_TICKS = 4L' "$machine"
-  grep -q 'nextIdleCheck' "$machine"
-  grep -q 'lastIdleFingerprint' "$machine"
-  grep -q 'SupremeInventoryUtils.fingerprint' "$machine"
-  grep -q 'getGameTime()' "$machine"
-  grep -q 'clearIdleBackoff' "$machine"
-done
+      int ticks = getTimeProcess() * 2;
+      int chance = Math.min(100, itemRecipe.getChance() * getUpgradeLuck());
+      var reservation = SupremeTechInputReservation.tryReserve(b, inv, getInputSlots(),
+          new int[]{1, 1}, new ItemStack[]{itemRecipe.getInput1(), itemRecipe.getInput2()}, false,
+          STATE_TYPE, output, ticks, chance);
+      if (reservation.isEmpty()) {
+        invalidProgressBar(inv, "&cCannot reserve inputs safely");
+        return;
+      }
+      ItemStack[] reserved = reservation.get().items();
+      MutationCycle cycle = new MutationCycle(reserved[0], reserved[1], output, chance);
+      processing.put(b, cycle);
+      progressTime.put(b, ticks);
+      lastProgressCheckpoint.put(b, ticks);
+      successfulMutations.remove(b);
+      SupremeSpecialMachineStateCodec.savePrepared(b, reservation.get().checkpoint());
+      invalidProgressBar(inv, output.getType(), " ");
+      return;
+    }
 
-# Unreadable checkpoints must be held; empty-container fallbacks cannot authorize destruction.
-grep -q 'new SupremeMachineBreakHandler(this::isBreakRecoveryBlocked' "$GENERIC"
-grep -q 'recoveryGuard.block(b)' "$GENERIC"
-grep -q 'retryMachineRecovery' "$GENERIC"
-grep -q 'isRecoveryBlocked(blockMenu.getBlock())' "$GENERIC"
-for machine in "$GENERIC" \
-  "$JAVA/machine/VirtualGarden.java" \
-  "$JAVA/machine/VirtualAquarium.java" \
-  "$JAVA/machine/MobCollector.java" \
-  "$JAVA/machine/tech/TechRobotic.java" \
-  "$JAVA/machine/tech/TechMutation.java"; do
-  grep -q 'if (isRecoveryBlocked(b)) return;' "$machine"
-  grep -q 'addRecoveryDiagnosticLines' "$machine"
-  grep -q 'resetRecoveryRuntime' "$machine"
-done
-for machine in "$JAVA/machine/tech/TechRobotic.java" "$JAVA/machine/tech/TechMutation.java"; do
-  if grep -q 'loadReservedOnly' "$machine"; then
-    echo "Unreadable reserved items must not be interpreted as empty during recovery." >&2
-    exit 1
-  fi
-done
-grep -q 'saveAuxText' "$JAVA/machine/tech/TechMutation.java"
+    if (getProgressTime(b) <= 0) {
+      Boolean success = successfulMutations.get(b);
+      if (success == null) {
+        success = UtilMachine.getRandomInt() <= itemProcessing.chance();
+        successfulMutations.put(b, success);
+        SupremeSpecialMachineStateCodec.saveAuxText(b, STATE_TYPE, Boolean.toString(success));
+      }
 
-grep -q 'commitAquariumTool' "$JAVA/machine/VirtualAquarium.java"
-if awk '/protected MachineRecipe findNextRecipe/,/^  }/' "$JAVA/machine/VirtualAquarium.java" | grep -q 'setDamage'; then
-  echo "Virtual Aquarium must not spend tool durability while merely selecting a recipe." >&2
-  exit 1
-fi
+      if (success) {
+        ItemStack output = itemProcessing.output().clone();
+        if (!SupremeInventoryUtils.canFit(inv, getOutputSlots(), output)) {
+          invalidProgressBar(inv, "&cOutput is full");
+          return;
+        }
+        SupremeInventoryUtils.pushAll(inv, getOutputSlots(), output);
+        invalidProgressBar(inv, Material.BLACK_STAINED_GLASS_PANE, " Success! ");
+      } else {
+        invalidProgressBar(inv, Material.BLACK_STAINED_GLASS_PANE, " Fail! ");
+      }
 
-ARMOR="$JAVA/gear/AbstractArmor.java"
-grep -q 'public boolean isFullSetRequired()' "$ARMOR"
-awk '/public boolean isFullSetRequired\(\)/,/^  }/' "$ARMOR" | grep -q 'return true;'
-grep -q 'id.endsWith("_THORNIUM")' "$ARMOR"
-grep -q 'id.endsWith("_MAGIC")' "$ARMOR"
-grep -q 'id.endsWith("_RARE")' "$ARMOR"
-grep -q 'id.endsWith("_EPIC")' "$ARMOR"
-grep -q 'id.endsWith("_LEGENDARY")' "$ARMOR"
-grep -q 'id.endsWith("_SUPREME")' "$ARMOR"
-grep -q 'supreme_armor_thornium_base' "$ARMOR"
-grep -q 'supreme_armor_thornium_magic' "$ARMOR"
-grep -q 'supreme_armor_thornium_rare' "$ARMOR"
-grep -q 'supreme_armor_thornium_epic' "$ARMOR"
-grep -q 'supreme_armor_thornium_legendary' "$ARMOR"
-grep -q 'supreme_armor_thornium_supreme' "$ARMOR"
+      clearState(b);
+      return;
+    }
 
+    processTicks(b, inv, itemProcessing.output());
+  }
 
-# Tech Generator MobTech roles and formulas must stay aligned with the item lore. The historical
-# upstream implementation used 0.015625 for speed (10x too small) and accidentally gave every
-# MobTech type a speed bonus.
-TECH_GENERATOR="$JAVA/machine/tech/TechGenerator.java"
-grep -q 'MOB_TECH_EFFECT_PER_ITEM = 0.15625F' "$TECH_GENERATOR"
-grep -q 'case SIMPLE -> Math.round(amount \* MOB_TECH_EFFECT_PER_ITEM)' "$TECH_GENERATOR"
-grep -q 'case ROBOTIC_ACCELERATION, MUTATION_BERSERK ->' "$TECH_GENERATOR"
-grep -q 'Math.round((mobTech.getMobTechTier() + 1) \* amount \* MOB_TECH_EFFECT_PER_ITEM)' "$TECH_GENERATOR"
-grep -q 'case ROBOTIC_EFFICIENCY, ROBOTIC_CLONING, MUTATION_INTELLIGENCE, MUTATION_LUCK -> 0;' "$TECH_GENERATOR"
-if grep -q '0\.015625F' "$TECH_GENERATOR"; then
-  echo "Tech Generator speed effects must not regress to the historical 10x-too-small constant." >&2
-  exit 1
-fi
+  public int getProgressTime(Block b) {
+    return progressTime.getOrDefault(b, getTimeProcess() * 2);
+  }
 
-SETUP_TECH="$JAVA/setup/SetupTechMachines.java"
-grep -q 'setMachineIdentifier(TechRobotic.TECH_ROBOTIC_II.getItemId())' "$SETUP_TECH"
-grep -q 'setMachineIdentifier(TechRobotic.TECH_ROBOTIC_III.getItemId())' "$SETUP_TECH"
+  private void processTicks(Block b, BlockMenu inv, ItemStack result) {
+    int ticksTotal = getTimeProcess() * 2;
+    int ticksLeft = getProgressTime(b);
+    if (ticksLeft <= 0) {
+      invalidProgressBar(inv, "&cMachine time failure");
+      return;
+    }
 
-grep -q 'SupremeMachineDiagnostics diagnostics' "$JAVA/command/SupremeCommand.java"
+    if (!takeCharge(b.getLocation())) {
+      invalidProgressBar(inv, "&cNo power to machine");
+      return;
+    }
 
-echo "Supreme forward-compatibility, machine concurrency, transport, mob scan, async output safety, inventory-aware idle backoff, rollback, persistence, armor, energy, and Tech Generator MobTech invariants verified."
+    int nextProgress = Math.max(ticksLeft - getSpeed(), 0);
+    progressTime.put(b, nextProgress);
+    for (int i : InventoryRecipe.TECH_MUTATION_PROGRESS_BAR_SLOT) {
+      ChestMenuUtils.updateProgressbar(inv, i, Math.round(ticksLeft / (float) getSpeed()),
+          Math.round(ticksTotal / (float) getSpeed()), result);
+    }
+
+    int previousCheckpoint = lastProgressCheckpoint.getOrDefault(b, ticksTotal);
+    if (nextProgress <= 0
+        || Math.abs(previousCheckpoint - nextProgress) >= PROGRESS_CHECKPOINT_INTERVAL) {
+      SupremeSpecialMachineStateCodec.saveProgress(b, STATE_TYPE, nextProgress);
+      lastProgressCheckpoint.put(b, nextProgress);
+    }
+  }
+
+  private MobTechMutationGeneric validRecipeItem(BlockMenu inv) {
+    if (inv == null) {
+      return null;
+    }
+
+    for (MobTechMutationGeneric produce : recipes) {
+      ItemStack input1 = produce.getInput1();
+      ItemStack input2 = produce.getInput2();
+      if (SlimefunUtils.isItemSimilar(inv.getItemInSlot(getInputSlots()[0]), input1, false, false)
+          && SlimefunUtils.isItemSimilar(inv.getItemInSlot(getInputSlots()[1]), input2, false, false)) {
+        return produce;
+      }
+    }
+    return null;
+  }
+
+  @Override
+  protected String getPersistentStateType() {
+    return STATE_TYPE;
+  }
+
+  @Override
+  protected void restoreCheckpointForBreak(Block block) {
+    restoreStateIfNeeded(block);
+  }
+
+  private boolean restoreStateIfNeeded(Block block) {
+    if (isRecoveryBlocked(block)) return false;
+    if (processing.containsKey(block)) {
+      return true;
+    }
+    if (!SupremeSpecialMachineStateCodec.hasState(block, STATE_TYPE)) {
+      return false;
+    }
+
+    try {
+      Optional<SupremeSpecialMachineStateCodec.State> restored =
+          SupremeSpecialMachineStateCodec.load(block, STATE_TYPE);
+      if (restored.isPresent()) {
+        SupremeSpecialMachineStateCodec.State state = restored.get();
+        if (isSpecialStateUsable(state)) {
+          MutationCycle cycle = new MutationCycle(state.reservedItems()[0].clone(),
+              state.reservedItems()[1].clone(), state.outputs()[0].clone(),
+              Math.max(0, state.auxInt()));
+          processing.put(block, cycle);
+          progressTime.put(block, Math.max(0, state.progress()));
+          lastProgressCheckpoint.put(block, Math.max(0, state.progress()));
+          clearIdleBackoff(block);
+          if ("true".equalsIgnoreCase(state.auxText())) {
+            successfulMutations.put(block, true);
+          } else if ("false".equalsIgnoreCase(state.auxText())) {
+            successfulMutations.put(block, false);
+          }
+          return true;
+        }
+      }
+    } catch (RuntimeException ex) {
+      // Keep the original record and pause if preparing live state also fails.
+    }
+
+    blockRecovery(block);
+    return false;
+  }
+
+  private void clearIdleBackoff(Block block) {
+    nextIdleCheck.remove(block);
+    lastIdleFingerprint.remove(block);
+  }
+
+  @Override
+  protected void resetRecoveryRuntime(Block block) {
+    super.resetRecoveryRuntime(block);
+    processing.remove(block);
+    progressTime.remove(block);
+    successfulMutations.remove(block);
+    lastProgressCheckpoint.remove(block);
+    clearIdleBackoff(block);
+  }
+
+  private void clearState(Block block) {
+    processing.remove(block);
+    progressTime.remove(block);
+    successfulMutations.remove(block);
+    lastProgressCheckpoint.remove(block);
+    clearIdleBackoff(block);
+    SupremeSpecialMachineStateCodec.clear(block);
+  }
+
+  @Override
+  protected void onMachineBreak(Block block) {
+    restoreStateIfNeeded(block);
+    MutationCycle cycle = processing.get(block);
+    if (cycle != null && block.getWorld() != null) {
+      block.getWorld().dropItemNaturally(block.getLocation(), cycle.input1().clone());
+      block.getWorld().dropItemNaturally(block.getLocation(), cycle.input2().clone());
+    }
+    clearState(block);
+  }
+
+  @Override
+  public List<String> getMachineDiagnosticLines(Block block) {
+    List<String> lines = new ArrayList<>();
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
+    BlockMenu inv = BlockStorage.getInventory(block);
+    lines.add("Machine: " + getId() + " (TECH_MUTATION)");
+    lines.add("Charge: " + getCharge(block.getLocation()) + " J | Consumption: "
+        + UtilEnergy.toPerSecond(getEnergyConsumption()) + " J/s");
+    if (inv == null) {
+      lines.add("No Slimefun inventory is loaded for this block.");
+      return lines;
+    }
+
+    restoreStateIfNeeded(block);
+    if (addRecoveryDiagnosticLines(block, lines)) return lines;
+    MutationCycle cycle = processing.get(block);
+    if (cycle == null) {
+      lines.add("State: IDLE / waiting for mutation inputs");
+      lines.add("Idle recipe retry: every " + IDLE_RETRY_TICKS
+          + " ticks while mutation inputs are unchanged");
+      return lines;
+    }
+
+    int progress = getProgressTime(block);
+    Boolean success = successfulMutations.get(block);
+    String state;
+    if (success != null && success
+        && !SupremeInventoryUtils.canFit(inv, getOutputSlots(), cycle.output())) {
+      state = "OUTPUT FULL";
+    } else if (getCharge(block.getLocation()) < getEnergyConsumption() && progress > 0) {
+      state = "WAITING FOR POWER";
+    } else if (progress <= 0 && success == null) {
+      state = "READY TO ROLL RESULT";
+    } else if (progress <= 0) {
+      state = success ? "RESULT READY" : "FAILED RESULT READY";
+    } else {
+      state = "PROCESSING";
+    }
+
+    lines.add("State: " + state + " | Progress: " + progress + "/" + (getTimeProcess() * 2));
+    lines.add("Input 1: " + describeItem(cycle.input1()));
+    lines.add("Input 2: " + describeItem(cycle.input2()));
+    lines.add("Output: " + describeItem(cycle.output()) + " | Chance: " + cycle.chance() + "%");
+    if (success != null) {
+      lines.add("Persisted result: " + (success ? "success" : "failure"));
+    }
+    return lines;
+  }
+
+  private String describeItem(ItemStack item) {
+    SlimefunItem slimefunItem = SlimefunItem.getByItem(item);
+    return slimefunItem != null ? slimefunItem.getId() : item.getType().getKey().toString();
+  }
+
+  @Nonnull
+  @Override
+  public List<ItemStack> getDisplayRecipes() {
+    final CustomItemStack separator = new CustomItemStack(Material.BLACK_STAINED_GLASS_PANE, " ");
+    List<ItemStack> displayRecipes = new ArrayList<>();
+    recipes.stream().filter(Objects::nonNull).forEach(recipe -> {
+      int chance = Math.min(100, recipe.getChance() * getUpgradeLuck());
+      displayRecipes.add(recipe.getInput1());
+      displayRecipes.add(new CustomItemStack(Material.NAME_TAG, " " + chance + "% chance"));
+      displayRecipes.add(recipe.getInput2());
+      displayRecipes.add(recipe.getOutput());
+      displayRecipes.add(separator);
+      displayRecipes.add(separator);
+    });
+    return displayRecipes;
+  }
+
+  public int getSpeed() {
+    return speed;
+  }
+
+  public TechMutation setSpeed(int speed) {
+    this.speed = speed;
+    return this;
+  }
+
+  public int getUpgradeLuck() {
+    return upgradeLuck;
+  }
+
+  public TechMutation setUpgradeLuck(int upgradeLuck) {
+    if (upgradeLuck < 1) {
+      upgradeLuck = 1;
+    } else if (upgradeLuck > 4) {
+      upgradeLuck = 4;
+    }
+    this.upgradeLuck = upgradeLuck;
+    return this;
+  }
+
+  @Nonnull
+  @Override
+  public Radioactivity getRadioactivity() {
+    return Radioactivity.VERY_HIGH;
+  }
+}
