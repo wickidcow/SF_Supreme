@@ -50,6 +50,14 @@ Important maintenance work includes:
 
 See `CHANGELOG.md` and `COMPATIBILITY.md` for deeper maintenance and testing details.
 
+## Soulbound Supreme equipment
+
+Supreme armor, weapons and tools implement Slimefun's `Soulbound` attribute. Their new item templates also carry the native `slimefun:soulbound` byte flag and canonical gray Soulbound lore, rather than relying on an aqua display-only label. **Slimefun Legacy's existing death/respawn listener remains responsible for saving and returning equipment.** No second inventory snapshot or on-respawn item payout is introduced.
+
+For existing Supreme equipment with **verified historical Supreme item IDs**, a compatibility listener runs before Slimefun's soulbound death handler. If the gear is enabled in the world, not already protected, and an identical stack appears both in the player's inventory and the actual death drops, the listener marks both with Slimefun's native soulbound flag and canonical lore. Slimefun then performs the normal drop removal and respawn return. The item's stored Supreme ID, custom model, enchantments, damage and unrelated persistent metadata are preserved. It does not rescue gear by matching only its displayed name or aqua Soulbound text; unidentified gear must be investigated rather than guessed about.
+
+Operators can hold a suspect piece of gear in the main hand and run `/supreme doctor soulbound` to inspect the saved Slimefun ID, whether it resolves to Supreme gear, whether it uses a historical ID and whether the current Slimefun runtime recognizes it as Soulbound in that world. This is a read-only diagnostic. A positive result cannot certify compatibility with other death/inventory plugins; check using a controlled server or backup before real-world death tests.
+
 ## Machine checkpoint recovery
 
 A machine with an unreadable, incomplete or unsupported checkpoint pauses with `RECOVERY BLOCKED` in `/supreme doctor machine`. Its original Slimefun block-data fields remain in place. It does not consume inputs, spend energy or produce new outputs while blocked. Normal Slimefun player breaking, Android mining and explosions are prevented, and item-aware Cargo/Networks insertion uses the occupied status slot. Existing visible inventory contents remain accessible.

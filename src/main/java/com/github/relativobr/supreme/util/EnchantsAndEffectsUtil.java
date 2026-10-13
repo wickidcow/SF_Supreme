@@ -1,7 +1,9 @@
 package com.github.relativobr.supreme.util;
 
 import com.github.relativobr.supreme.Supreme;
+import com.github.relativobr.supreme.gear.SupremeSoulboundGear;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
+import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import org.bukkit.ChatColor;
 import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
@@ -35,7 +37,9 @@ public class EnchantsAndEffectsUtil {
             // Generate only the new lines; retain existing component lore without flattening it.
             List<String> lore = new ArrayList<>();
 
-            lore.add(ChatColor.AQUA + "Soulbound");
+            // Slimefun's lore fallback recognizes the canonical gray marker, not an aqua label.
+            lore.add(ChatColor.GRAY + "Soulbound");
+            SupremeSoulboundGear.markTemplate(meta, Slimefun.getRegistry().getSoulboundDataKey());
 
             // find path
             String itemPath = getNewIdSupremeLegacy(item.getItemId()).toLowerCase();
@@ -78,7 +82,9 @@ public class EnchantsAndEffectsUtil {
             // Generate only the new lines; retain existing component lore without flattening it.
             List<String> lore = new ArrayList<>();
 
-            lore.add(ChatColor.AQUA + "Soulbound");
+            // Slimefun's lore fallback recognizes the canonical gray marker, not an aqua label.
+            lore.add(ChatColor.GRAY + "Soulbound");
+            SupremeSoulboundGear.markTemplate(meta, Slimefun.getRegistry().getSoulboundDataKey());
 
             // find path
             String itemPath = getNewIdSupremeLegacy(item.getItemId()).toLowerCase();

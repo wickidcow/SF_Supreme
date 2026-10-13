@@ -5,6 +5,8 @@ import com.github.relativobr.supreme.generic.machine.GenericMachine;
 import com.github.relativobr.supreme.generic.machine.SupremeMachineDiagnostics;
 import com.github.relativobr.supreme.util.SupremeRecipeDoctor;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -17,6 +19,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 /** Administrative Supreme diagnostics. */
 public final class SupremeCommand implements CommandExecutor, TabCompleter {
@@ -40,6 +43,8 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
           + ChatColor.DARK_GRAY + " - inspect the Supreme machine you are looking at");
       sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor retry"
           + ChatColor.DARK_GRAY + " - re-read a blocked machine checkpoint after repair");
+      sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor soulbound"
+          + ChatColor.DARK_GRAY + " - inspect Supreme gear held in your main hand");
       return true;
     }
 
@@ -53,6 +58,10 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
         runRecipeDoctor(sender);
         return true;
       }
+      if (args[1].equalsIgnoreCase("soulbound")) {
+        runSoulboundDoctor(sender);
+        return true;
+      }
       if (args[1].equalsIgnoreCase("machine")) {
         runMachineDoctor(sender, false);
         return true;
@@ -63,8 +72,42 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       }
     }
 
-    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " doctor <recipes|machine|retry>");
+    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " doctor <recipes|machine|retry|soulbound>");
     return true;
+  }
+
+  private void runSoulboundDoctor(CommandSender sender) {
+    if (!(sender instanceof Player player)) {
+      sender.sendMessage(ChatColor.RED + "Hold Supreme gear in your main hand to inspect its soulbound status.");
+      return;
+    }
+
+    ItemStack held = player.getInventory().getItemInMainHand();
+    if (held.getType().isAir()) {
+      sender.sendMessage(ChatColor.RED + "Hold the Supreme armor, weapon or tool in your main hand.");
+      return;
+    }
+
+    String savedId = Slimefun.getItemDataService().getItemData(held).orElse("(no Slimefun ID)");
+    boolean recognized = plugin.getSoulboundCompatibility().recognizesSupremeGear(held);
+    boolean historical = plugin.getSoulboundCompatibility().isHistoricalGear(held);
+    boolean bound = SlimefunUtils.isSoulbound(held, player.getWorld());
+
+    sender.sendMessage(ChatColor.AQUA + "Supreme Soulbound Doctor");
+    sender.sendMessage(ChatColor.GRAY + "Saved ID: " + ChatColor.WHITE + savedId);
+    sender.sendMessage(ChatColor.GRAY + "Registered Supreme gear: "
+        + (recognized ? ChatColor.GREEN + "yes" : ChatColor.RED + "no"));
+    sender.sendMessage(ChatColor.GRAY + "Historical Supreme ID: "
+        + (historical ? ChatColor.YELLOW + "yes" : ChatColor.WHITE + "no"));
+    sender.sendMessage(ChatColor.GRAY + "Slimefun soulbound in this world: "
+        + (bound ? ChatColor.GREEN + "yes" : ChatColor.RED + "no"));
+    if (!bound && !recognized) {
+      sender.sendMessage(ChatColor.YELLOW
+          + "This item cannot be safely recovered from its display lore alone. Check the saved item ID.");
+    } else if (!bound) {
+      sender.sendMessage(ChatColor.YELLOW
+          + "A recognized old gear ID can be given Slimefun's native tag by the death compatibility handler.");
+    }
   }
 
   private void runRecipeDoctor(CommandSender sender) {
@@ -148,6 +191,7 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       addIfMatches(options, "recipes", args[1]);
       addIfMatches(options, "machine", args[1]);
       addIfMatches(options, "retry", args[1]);
+      addIfMatches(options, "soulbound", args[1]);
     }
     return options;
   }
