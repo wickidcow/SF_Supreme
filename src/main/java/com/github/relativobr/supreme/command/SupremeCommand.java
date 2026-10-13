@@ -7,7 +7,6 @@ import com.github.relativobr.supreme.generic.machine.SupremeMachineDiagnostics;
 import com.github.relativobr.supreme.util.SupremeRecipeDoctor;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.attributes.ProtectionType;
-import io.github.thebusybiscuit.slimefun4.implementation.items.armor.ArmorProtectionUtils;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import java.util.ArrayList;
@@ -134,14 +133,34 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
           + "No registered Supreme armor detected. Check the saved item IDs and compatibility settings.");
       return;
     }
-    sender.sendMessage(ChatColor.GRAY + "Full-set radiation protection: "
-        + status(ArmorProtectionUtils.hasFullProtectionAgainst(player, ProtectionType.RADIATION)));
-    sender.sendMessage(ChatColor.GRAY + "Full-set bee protection: "
-        + status(ArmorProtectionUtils.hasFullProtectionAgainst(player, ProtectionType.BEES)));
-    sender.sendMessage(ChatColor.GRAY + "Full-set elytra wall protection: "
-        + status(ArmorProtectionUtils.hasFullProtectionAgainst(player, ProtectionType.FLYING_INTO_WALL)));
+    sender.sendMessage(ChatColor.GRAY + "Matching four-piece Supreme set (radiation): "
+        + status(hasCompleteSet(player, ProtectionType.RADIATION)));
+    sender.sendMessage(ChatColor.GRAY + "Matching four-piece Supreme set (bees): "
+        + status(hasCompleteSet(player, ProtectionType.BEES)));
+    sender.sendMessage(ChatColor.GRAY + "Matching four-piece Supreme set (elytra collision): "
+        + status(hasCompleteSet(player, ProtectionType.FLYING_INTO_WALL)));
     sender.sendMessage(ChatColor.DARK_GRAY
         + "Active status includes effects from other plugins/potions; it does not prove their source.");
+  }
+
+  private static boolean hasCompleteSet(Player player, ProtectionType protection) {
+    org.bukkit.NamespacedKey setId = null;
+    for (ItemStack piece : player.getInventory().getArmorContents()) {
+      SlimefunItem item = SlimefunItem.getByItem(piece);
+      if (!(item instanceof AbstractArmor armor) || !armor.canUse(player, false)
+          || armor.isDisabledIn(player.getWorld())) {
+        return false;
+      }
+      if (!java.util.Arrays.asList(armor.getProtectionTypes()).contains(protection)) {
+        return false;
+      }
+      org.bukkit.NamespacedKey id = armor.getArmorSetId();
+      if (setId != null && !setId.equals(id)) {
+        return false;
+      }
+      setId = id;
+    }
+    return setId != null;
   }
 
   private static String status(boolean enabled) {
