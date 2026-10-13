@@ -56,7 +56,7 @@ public final class SupremeSoulboundCompatibilityListener implements Listener {
     /** Read-only diagnostic: returns whether this is an unmigrated historical ID. */
     public boolean isHistoricalGear(ItemStack stack) {
         String id = storedId(stack);
-        return id != null && historicalGear.containsKey(id);
+        return id != null && SlimefunItem.getById(id) == null && historicalGear.containsKey(id);
     }
 
     private String storedId(ItemStack stack) {
@@ -72,7 +72,9 @@ public final class SupremeSoulboundCompatibilityListener implements Listener {
             return null;
         }
         SlimefunItem candidate = SlimefunItem.getById(id);
-        if (!isSupremeGear(candidate)) {
+        // A registered third-party item with the same historical ID owns that ID.
+        // Never reinterpret someone else's registered item as Supreme gear.
+        if (candidate == null) {
             candidate = historicalGear.get(id);
         }
         return isSupremeGear(candidate) && candidate.getItem().getType() == stack.getType()
