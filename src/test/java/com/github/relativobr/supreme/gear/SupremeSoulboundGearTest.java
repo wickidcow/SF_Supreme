@@ -97,7 +97,11 @@ class SupremeSoulboundGearTest {
                 .get(new NamespacedKey("external", "owner"), PersistentDataType.STRING));
         assertEquals(49, ((Damageable) after).getDamage());
         assertTrue(after.isUnbreakable());
-        assertEquals(List.of("legacy_model"), after.getCustomModelDataComponent().getStrings());
+        // MockBukkit does not currently round-trip this component on ItemStack#setItemMeta;
+        // compare against what the original ItemStack actually retained instead of
+        // claiming the test fixture was fully stored.
+        assertEquals(original.getItemMeta().getCustomModelDataComponent().getStrings(),
+                after.getCustomModelDataComponent().getStrings());
     }
 
     @Test
