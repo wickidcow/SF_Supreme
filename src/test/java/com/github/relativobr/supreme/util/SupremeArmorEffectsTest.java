@@ -64,7 +64,7 @@ class SupremeArmorEffectsTest {
     void legacyAndModernNamesResolveToRegisteredEffects(String configured, String canonical) {
         var type = SupremePotionEffects.resolve(configured);
         assertNotNull(type, configured + " should be a valid registry potion type");
-        assertEquals(canonical, type.getKeyOrThrow().getKey());
+        assertEquals(canonical, type.getKey().getKey());
     }
 
     @Test
@@ -76,7 +76,7 @@ class SupremeArmorEffectsTest {
                 if (!section.getBoolean(key)) continue;
                 var type = SupremePotionEffects.resolve(key);
                 assertNotNull(type, "Unresolved active potion: " + slot + "." + key);
-                observed.add(type.getKeyOrThrow().getKey());
+                observed.add(type.getKey().getKey());
             }
             assertEquals(EXPECTED.get(slot).size(), section.getKeys(false).size(),
                     "Unexpected configured effect key in " + slot);
@@ -100,7 +100,7 @@ class SupremeArmorEffectsTest {
                     default -> 0;
                 };
                 for (PotionEffect bonus : bonuses) {
-                    types.add(bonus.getType().getKeyOrThrow().getKey());
+                    types.add(bonus.getType().getKey().getKey());
                     assertEquals(amplifier, bonus.getAmplifier(), path);
                     assertEquals(600, bonus.getDuration(), path);
                     assertFalse(bonus.isAmbient(), path);
@@ -140,8 +140,8 @@ class SupremeArmorEffectsTest {
         effects.set("chestplate.saturation", false);
         var bonuses = EnchantsAndEffectsUtil.getPotionEffectsForItemPath("supreme_chestplate_epic", effects);
         assertEquals(Set.of("resistance", "strength"), Set.of(
-                bonuses[0].getType().getKeyOrThrow().getKey(),
-                bonuses[1].getType().getKeyOrThrow().getKey()));
+                bonuses[0].getType().getKey().getKey(),
+                bonuses[1].getType().getKey().getKey()));
         assertEquals(2, EnchantsAndEffectsUtil.getEffectLoreForItemPath("supreme_chestplate_epic", effects).size());
     }
 
