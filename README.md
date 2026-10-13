@@ -58,6 +58,27 @@ For existing Supreme equipment with **verified historical Supreme item IDs**, a 
 
 Operators can hold a suspect piece of gear in the main hand and run `/supreme doctor soulbound` to inspect the saved Slimefun ID, whether it resolves to Supreme gear, whether it uses a historical ID and whether the current Slimefun runtime recognizes it as Soulbound in that world. This is a read-only diagnostic. A positive result cannot certify compatibility with other death/inventory plugins; check using a controlled server or backup before real-world death tests.
 
+## 🛡 Supreme armor — potion bonuses and protective sets
+
+Every **Thornium** tier (base, Magic, Rare, Epic, Legendary and Supreme) has the following *per-piece* potion bonuses:
+
+| Piece | Potion bonuses |
+| --- | --- |
+| Helmet | Night Vision, Conduit Power, Water Breathing |
+| Chestplate | Resistance, Strength, Saturation |
+| Leggings | Speed, Haste, Regeneration |
+| Boots | Dolphin's Grace, Fire Resistance |
+
+The **Titanium, Aurum and Adamantium** armor families retain their enchantments and full-set protection, but do **not** grant these potion bonuses. Thornium tiers use the existing configured levels: base/Magic I, Rare/Epic II, Legendary/Supreme III by default. Every potion effect lasts 30 seconds and the Slimefun Legacy armor task normally refreshes it every 10 seconds; Supreme keeps its existing hidden particles/icon behavior. The Slimefun core setting `options.enable-armor-effects` must be `true` for these potions to refresh.
+
+Supreme's historic `supreme-effect` keys `damage_resistance`, `increase_damage` and `fast_digging` now resolve reliably to modern Resistance, Strength and Haste without requiring an existing `config.yml` edit. Both bonus generation and item lore use the same resolver. All 11 enabled effect keys and their matching tooltips are covered by tests.
+
+The bundled `supreme-enchant` config also retains the old `fall_damage` key. It now resolves as **Feather Falling**, so all nine Supreme boot definitions receive the exact configured enchantment level without replacing or rewriting server configurations.
+
+**Full-set protections are independent of potion effects.** Four matching pieces grant the addon protections against radiation, bees, and elytra wall collision. Mismatched families or tier levels do not form a protective set.
+
+Operators can run `/supreme doctor armor` while wearing armor to inspect each registered item, its configured potion effects and current active effects, Slimefun's global armor-effects switch and refresh interval, and the current full-set protection checks. A visible active potion can come from another plugin; the diagnostic is informational, not proof of effect ownership. `/supreme doctor soulbound` still checks whether a held item is actually recognized as soulbound.
+
 ## Machine checkpoint recovery
 
 A machine with an unreadable, incomplete or unsupported checkpoint pauses with `RECOVERY BLOCKED` in `/supreme doctor machine`. Its original Slimefun block-data fields remain in place. It does not consume inputs, spend energy or produce new outputs while blocked. Normal Slimefun player breaking, Android mining and explosions are prevented, and item-aware Cargo/Networks insertion uses the occupied status slot. Existing visible inventory contents remain accessible.

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Supreme armor effects and enchant compatibility
+
+- Resolve old Supreme potion configuration keys to modern registry effects, including Resistance, Strength and Haste; validate every configured potion key and ensure tooltip text matches the applied effect.
+- Preserve all 11 effect types, existing per-piece behavior, the 30-second effect duration, amplifier tiers, visibility settings, item IDs and saved metadata.
+- Repair the legacy `fall_damage` enchantment config key to Feather Falling. Preserve configured levels on all nine boot types, without forcing a config migration.
+- Add `/supreme doctor armor` for per-slot potion diagnostics, global Slimefun armor-effects status and full-set protection checks, and regression tests across all 36 armor definitions.
+- No recipes, drop behavior, production, Soulbound restoration or economy changes.
+
 ## Unreleased — Supreme gear Soulbound reliability
 
 - Stamp Slimefun's native soulbound byte metadata and canonical gray lore on newly prepared Supreme armor, weapons and tools, in addition to their existing `Soulbound` interface.

@@ -1,10 +1,12 @@
 package com.github.relativobr.supreme.command;
 
 import com.github.relativobr.supreme.Supreme;
+import com.github.relativobr.supreme.gear.AbstractArmor;
 import com.github.relativobr.supreme.generic.machine.GenericMachine;
 import com.github.relativobr.supreme.generic.machine.SupremeMachineDiagnostics;
 import com.github.relativobr.supreme.util.SupremeRecipeDoctor;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import io.github.thebusybiscuit.slimefun4.core.attributes.ProtectionType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import java.util.ArrayList;
@@ -20,6 +22,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.potion.PotionEffect;
 
 /** Administrative Supreme diagnostics. */
 public final class SupremeCommand implements CommandExecutor, TabCompleter {
@@ -45,6 +48,8 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
           + ChatColor.DARK_GRAY + " - re-read a blocked machine checkpoint after repair");
       sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor soulbound"
           + ChatColor.DARK_GRAY + " - inspect Supreme gear held in your main hand");
+      sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor armor"
+          + ChatColor.DARK_GRAY + " - inspect worn Supreme armor effects and protection");
       return true;
     }
 
@@ -62,6 +67,10 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
         runSoulboundDoctor(sender);
         return true;
       }
+      if (args[1].equalsIgnoreCase("armor")) {
+        runArmorDoctor(sender);
+        return true;
+      }
       if (args[1].equalsIgnoreCase("machine")) {
         runMachineDoctor(sender, false);
         return true;
@@ -72,8 +81,90 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       }
     }
 
-    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " doctor <recipes|machine|retry|soulbound>");
+    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " doctor <recipes|machine|retry|soulbound|armor>");
     return true;
+  }
+
+  private void runArmorDoctor(CommandSender sender) {
+    if (!(sender instanceof Player player)) {
+      sender.sendMessage(ChatColor.RED + "Wear Supreme armor to inspect its potion effects.");
+      return;
+    }
+
+    boolean coreEffectsEnabled = Slimefun.getCfg().getBoolean("options.enable-armor-effects");
+    int refreshSeconds = Slimefun.getCfg().getInt("options.armor-update-interval");
+    sender.sendMessage(ChatColor.AQUA + "Supreme Armor Effects Doctor");
+    sender.sendMessage(ChatColor.GRAY + "Slimefun armor effects: "
+        + (coreEffectsEnabled ? ChatColor.GREEN + "enabled" : ChatColor.RED + "disabled")
+        + ChatColor.GRAY + " | Refresh: " + ChatColor.WHITE + refreshSeconds + "s");
+
+    String[] slots = {"Boots", "Leggings", "Chestplate", "Helmet"};
+    ItemStack[] worn = player.getInventory().getArmorContents();
+    int detected = 0;
+    for (int i = 0; i < slots.length; i++) {
+      ItemStack stack = worn[i];
+      SlimefunItem sfItem = SlimefunItem.getByItem(stack);
+      if (!(sfItem instanceof AbstractArmor armor)) {
+        sender.sendMessage(ChatColor.GRAY + slots[i] + ": " + ChatColor.DARK_GRAY
+            + "not recognized as Supreme armor");
+        continue;
+      }
+      detected++;
+      boolean allowed = armor.canUse(player, false) && !armor.isDisabledIn(player.getWorld());
+      sender.sendMessage(ChatColor.GRAY + slots[i] + ": " + ChatColor.WHITE + armor.getId()
+          + (allowed ? "" : ChatColor.RED + " [unavailable in this world / not unlocked]"));
+      PotionEffect[] configured = armor.getPotionEffects();
+      if (configured.length == 0) {
+        sender.sendMessage(ChatColor.DARK_GRAY + "  No potion bonuses for this armor tier.");
+      }
+      for (PotionEffect desired : configured) {
+        PotionEffect active = player.getPotionEffect(desired.getType());
+        boolean present = active != null;
+        String effect = desired.getType().getKey().getKey().replace('_', ' ');
+        sender.sendMessage(ChatColor.DARK_GRAY + "  " + effect + " "
+            + (desired.getAmplifier() + 1) + ": "
+            + (present ? ChatColor.GREEN + "active (level " + (active.getAmplifier() + 1) + ")"
+                       : ChatColor.YELLOW + "not active"));
+      }
+    }
+
+    if (detected == 0) {
+      sender.sendMessage(ChatColor.YELLOW
+          + "No registered Supreme armor detected. Check the saved item IDs and compatibility settings.");
+      return;
+    }
+    sender.sendMessage(ChatColor.GRAY + "Matching four-piece Supreme set (radiation): "
+        + status(hasCompleteSet(player, ProtectionType.RADIATION)));
+    sender.sendMessage(ChatColor.GRAY + "Matching four-piece Supreme set (bees): "
+        + status(hasCompleteSet(player, ProtectionType.BEES)));
+    sender.sendMessage(ChatColor.GRAY + "Matching four-piece Supreme set (elytra collision): "
+        + status(hasCompleteSet(player, ProtectionType.FLYING_INTO_WALL)));
+    sender.sendMessage(ChatColor.DARK_GRAY
+        + "Active status includes effects from other plugins/potions; it does not prove their source.");
+  }
+
+  private static boolean hasCompleteSet(Player player, ProtectionType protection) {
+    org.bukkit.NamespacedKey setId = null;
+    for (ItemStack piece : player.getInventory().getArmorContents()) {
+      SlimefunItem item = SlimefunItem.getByItem(piece);
+      if (!(item instanceof AbstractArmor armor) || !armor.canUse(player, false)
+          || armor.isDisabledIn(player.getWorld())) {
+        return false;
+      }
+      if (!java.util.Arrays.asList(armor.getProtectionTypes()).contains(protection)) {
+        return false;
+      }
+      org.bukkit.NamespacedKey id = armor.getArmorSetId();
+      if (setId != null && !setId.equals(id)) {
+        return false;
+      }
+      setId = id;
+    }
+    return setId != null;
+  }
+
+  private static String status(boolean enabled) {
+    return enabled ? ChatColor.GREEN + "yes" : ChatColor.YELLOW + "no";
   }
 
   private void runSoulboundDoctor(CommandSender sender) {
@@ -192,6 +283,7 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       addIfMatches(options, "machine", args[1]);
       addIfMatches(options, "retry", args[1]);
       addIfMatches(options, "soulbound", args[1]);
+      addIfMatches(options, "armor", args[1]);
     }
     return options;
   }
