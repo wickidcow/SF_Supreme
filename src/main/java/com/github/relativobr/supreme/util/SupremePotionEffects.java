@@ -46,7 +46,7 @@ final class SupremePotionEffects {
     }
 
     static String displayName(PotionEffectType type) {
-        String key = type.getKeyOrThrow().getKey();
+        String key = type.getKey().getKey();
         if ("dolphins_grace".equals(key)) {
             return "Dolphin's Grace";
         }
