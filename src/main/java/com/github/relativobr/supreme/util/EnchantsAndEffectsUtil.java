@@ -129,99 +129,74 @@ public class EnchantsAndEffectsUtil {
 
 
     public static PotionEffect[] getPotionEffects(SlimefunItemStack item) {
-
-        PotionEffect[] effect = new PotionEffect[]{};
-
-        ConfigurationSection typeSectionEffects = Supreme.inst().getConfig().getConfigurationSection("supreme-effect");
-
-        if (typeSectionEffects == null) {
+        ConfigurationSection settings = Supreme.inst().getConfig().getConfigurationSection("supreme-effect");
+        if (settings == null) {
             Supreme.inst().log(Level.SEVERE,
-                    "Config section \"supreme-enchant\" missing, Check your config and report this!");
-            return effect;
+                    "Config section \"supreme-effect\" missing; no armor potion effects can be applied.");
+            return new PotionEffect[0];
         }
+        return getPotionEffectsForItemPath(
+                getNewIdSupremeLegacy(item.getItemId()).toLowerCase(Locale.ROOT), settings);
+    }
 
-        // find path
-        String itemPath = getNewIdSupremeLegacy(item.getItemId()).toLowerCase();
-
-        // ignore basic armor effects
-        if (itemPath.contains("adamantium")
-                || itemPath.contains("aurum")
-                || itemPath.contains("titanium")) {
-            return effect;
+    /**
+     * Resolves a single Supreme gear type from the same config used for tooltips.
+     * Kept separate from plugin setup so all armor tiers can be regression tested.
+     */
+    static PotionEffect[] getPotionEffectsForItemPath(String itemPath, ConfigurationSection settings) {
+        if (settings == null || isBasicArmor(itemPath)) {
+            return new PotionEffect[0];
         }
-
-        int amplifier = getAmplifier(typeSectionEffects, itemPath);
-
-        if (itemPath.contains("helmet")) {
-            effect = getEffects(effect, amplifier, typeSectionEffects.getConfigurationSection("helmet"));
-        } else if (itemPath.contains("chestplate")) {
-            effect = getEffects(effect, amplifier, typeSectionEffects.getConfigurationSection("chestplate"));
-        } else if (itemPath.contains("leggings")) {
-            effect = getEffects(effect, amplifier, typeSectionEffects.getConfigurationSection("leggings"));
-        } else if (itemPath.contains("boots")) {
-            effect = getEffects(effect, amplifier, typeSectionEffects.getConfigurationSection("boots"));
-        }
-
-        return effect;
-
+        int amplifier = getAmplifier(settings, itemPath);
+        return getEffects(getEffectSection(settings, itemPath), amplifier);
     }
 
     private static void buildLoreEffects(List<String> lore, String itemPath) {
-
-        ConfigurationSection typeSectionEffects = Supreme.inst().getConfig().getConfigurationSection("supreme-effect");
-
-        if (typeSectionEffects == null) {
+        ConfigurationSection settings = Supreme.inst().getConfig().getConfigurationSection("supreme-effect");
+        if (settings == null) {
             Supreme.inst().log(Level.SEVERE,
-                    "Config section \"supreme-enchant\" missing, Check your config and report this!");
+                    "Config section \"supreme-effect\" missing; armor potion lore cannot be generated.");
             return;
         }
+        lore.addAll(getEffectLoreForItemPath(itemPath, settings));
+    }
 
-        String amplifier = buildLoreAmplifier(getAmplifier(typeSectionEffects, itemPath));
-
-        if (itemPath.contains("helmet")) {
-            for (String nameEffect : getNamesEffects(typeSectionEffects.getConfigurationSection("helmet"))) {
-                lore.add(ChatColor.DARK_PURPLE + nameEffect + amplifier);
-            }
-        } else if (itemPath.contains("chestplate")) {
-            for (String nameEffect : getNamesEffects(typeSectionEffects.getConfigurationSection("chestplate"))) {
-                lore.add(ChatColor.DARK_PURPLE + nameEffect + amplifier);
-            }
-        } else if (itemPath.contains("leggings")) {
-            for (String nameEffect : getNamesEffects(typeSectionEffects.getConfigurationSection("leggings"))) {
-                lore.add(ChatColor.DARK_PURPLE + nameEffect + amplifier);
-            }
-        } else if (itemPath.contains("boots")) {
-            for (String nameEffect : getNamesEffects(typeSectionEffects.getConfigurationSection("boots"))) {
-                lore.add(ChatColor.DARK_PURPLE + nameEffect + amplifier);
-            }
+    static List<String> getEffectLoreForItemPath(String itemPath, ConfigurationSection settings) {
+        if (settings == null || isBasicArmor(itemPath)) {
+            return List.of();
         }
+
+        String level = buildLoreAmplifier(getAmplifier(settings, itemPath));
+        List<String> lore = new ArrayList<>();
+        for (String effectName : getNamesEffects(getEffectSection(settings, itemPath))) {
+            lore.add(ChatColor.DARK_PURPLE + effectName + level);
+        }
+        return lore;
+    }
+
+    private static boolean isBasicArmor(String itemPath) {
+        return itemPath.contains("adamantium")
+                || itemPath.contains("aurum")
+                || itemPath.contains("titanium");
+    }
+
+    private static ConfigurationSection getEffectSection(ConfigurationSection settings, String itemPath) {
+        if (itemPath.contains("helmet")) {
+            return settings.getConfigurationSection("helmet");
+        } else if (itemPath.contains("chestplate")) {
+            return settings.getConfigurationSection("chestplate");
+        } else if (itemPath.contains("leggings")) {
+            return settings.getConfigurationSection("leggings");
+        } else if (itemPath.contains("boots")) {
+            return settings.getConfigurationSection("boots");
+        }
+        return null;
     }
 
     private static String buildLoreAmplifier(int amplifier) {
-        switch (amplifier) {
-            case 0:
-                return " I";
-            case 1:
-                return " II";
-            case 2:
-                return " III";
-            case 3:
-                return " IV";
-            case 4:
-                return " V";
-            case 5:
-                return " VI";
-            case 6:
-                return " VII";
-            case 7:
-                return " VIII";
-            case 8:
-                return " IX";
-            case 9:
-                return " X";
-            default:
-                return "";
-        }
+        // The effect amplifier is zero-based; support the historical 0..10 cap.
+        String[] levels = {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"};
+        return amplifier >= 0 && amplifier < levels.length ? " " + levels[amplifier] : "";
     }
 
     private static int getAmplifier(ConfigurationSection typeSection, String itemPath) {
@@ -252,35 +227,51 @@ public class EnchantsAndEffectsUtil {
         return amplifier;
     }
 
-    private static PotionEffect[] getEffects(PotionEffect[] effect, int amplifier, ConfigurationSection section) {
-        if (section != null) {
-            List<PotionEffect> potionEffects = new ArrayList<>();
-            for (String key : section.getKeys(true)) {
-                PotionEffectType potionEffectType = PotionEffectType.getByName(key);
-                // check enable
-                if (section.getBoolean(key) && potionEffectType != null) {
-                    potionEffects.add(new PotionEffect(potionEffectType, 600, amplifier, false, false, false));
-                }
-            }
-            if (potionEffects.size() > 0) {
-                effect = potionEffects.toArray(new PotionEffect[]{});
+    private static final Set<String> WARNED_EFFECT_KEYS = new HashSet<>();
+
+    private static PotionEffectType resolveEffect(String key) {
+        PotionEffectType type = SupremePotionEffects.resolve(key);
+        if (type == null && WARNED_EFFECT_KEYS.add(key)) {
+            Supreme plugin = Supreme.inst();
+            if (plugin != null) {
+                plugin.log(Level.WARNING,
+                        "Unknown supreme-effect potion key '" + key
+                        + "'. This effect will not be applied; use a Minecraft registry name.");
             }
         }
-        return effect;
+        return type;
+    }
+
+    private static PotionEffect[] getEffects(ConfigurationSection section, int amplifier) {
+        if (section == null) {
+            return new PotionEffect[0];
+        }
+        List<PotionEffect> effects = new ArrayList<>();
+        for (String key : section.getKeys(false)) {
+            if (!section.getBoolean(key)) {
+                continue;
+            }
+            PotionEffectType type = resolveEffect(key);
+            if (type != null) {
+                // Preserve 30-second duration and the intentionally hidden particles/icon.
+                effects.add(new PotionEffect(type, 600, amplifier, false, false, false));
+            }
+        }
+        return effects.toArray(new PotionEffect[0]);
     }
 
     private static List<String> getNamesEffects(ConfigurationSection section) {
+        if (section == null) {
+            return List.of();
+        }
         List<String> names = new ArrayList<>();
-        if (section != null) {
-            for (String key : section.getKeys(true)) {
-                PotionEffectType potionEffectType = PotionEffectType.getByName(key);
-                // check enable
-                if (section.getBoolean(key) && potionEffectType != null) {
-                    String name = potionEffectType.getName();
-                    name = name.replace("_", " ");
-                    name = name.substring(0, 1).toUpperCase().concat(name.substring(1).toLowerCase());
-                    names.add(name);
-                }
+        for (String key : section.getKeys(false)) {
+            if (!section.getBoolean(key)) {
+                continue;
+            }
+            PotionEffectType type = resolveEffect(key);
+            if (type != null) {
+                names.add(SupremePotionEffects.displayName(type));
             }
         }
         return names;
