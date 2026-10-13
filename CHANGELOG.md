@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Supreme gear Soulbound reliability
+
+- Stamp Slimefun's native soulbound byte metadata and canonical gray lore on newly prepared Supreme armor, weapons and tools, in addition to their existing `Soulbound` interface.
+- On player death, repair only registered historical Supreme gear IDs that can be verified against both the inventory and actual death drops. Slimefun's existing listener remains the only component responsible for retaining and returning items.
+- Replace the old aqua cosmetic line with the canonical Soulbound line during verified legacy repair while preserving the item's saved ID and other metadata.
+- Add `/supreme doctor soulbound` for read-only gear identity and Soulbound checks, plus tests for actual flags, legacy repairs and duplicate avoidance.
+- No equipment power, recipe, item ID, machine, probability, production or economy changes.
+
 ## Supreme Legacy 1.0.20
 
 - Tech Robotic and Tech Mutation reserve copies of the supplied input stacks, preserving their names, rich lore and typed persistent metadata for checkpoint recovery and deliberate-break refunds. Recipe templates still determine matching and newly produced outputs.
