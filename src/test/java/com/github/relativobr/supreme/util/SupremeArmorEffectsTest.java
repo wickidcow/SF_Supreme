@@ -155,6 +155,54 @@ class SupremeArmorEffectsTest {
     }
 
     @Test
+    void everyArmorEnchantmentKeyWithNonzeroLevelIsSupported() {
+        for (String slot : SLOTS) {
+            for (String tier : TIERS) {
+                validateEnchants("supreme_" + slot + "_" + tier);
+            }
+            for (String basic : List.of("titanium", "aurum", "adamantium")) {
+                validateEnchants("supreme_" + basic + "_" + slot);
+            }
+        }
+    }
+
+    private void validateEnchants(String itemPath) {
+        ConfigurationSection section = Objects.requireNonNull(
+                config.getConfigurationSection("supreme-enchant." + itemPath), itemPath);
+        int expected = 0;
+        for (String key : section.getKeys(false)) {
+            if ("unbreakable".equals(key) || section.getInt(key) == 0) {
+                continue;
+            }
+            expected++;
+            assertNotNull(SupremeEnchantmentResolver.resolve(key),
+                    "Unresolved enchantment " + key + " in " + itemPath);
+        }
+        assertEquals(expected, EnchantsAndEffectsUtil.getEnchants(section).size(), itemPath);
+    }
+
+    @Test
+    void legacyFallDamageEnchantIsFeatherFallingForEverySupremeBoot() {
+        var featherFalling = SupremeEnchantmentResolver.resolve("feather_falling");
+        assertNotNull(featherFalling);
+        for (String basic : List.of("titanium", "aurum", "adamantium")) {
+            assertBootFeatherFalling("supreme_" + basic + "_boots", 2, featherFalling);
+        }
+        int[] levels = {5, 7, 10, 20, 25, 40};
+        for (int i = 0; i < TIERS.size(); i++) {
+            assertBootFeatherFalling("supreme_boots_" + TIERS.get(i), levels[i], featherFalling);
+        }
+    }
+
+    private void assertBootFeatherFalling(String key, int expected,
+                                          org.bukkit.enchantments.Enchantment featherFalling) {
+        ConfigurationSection section = Objects.requireNonNull(
+                config.getConfigurationSection("supreme-enchant." + key));
+        assertEquals(expected, section.getInt("fall_damage"), key);
+        assertEquals(expected, EnchantsAndEffectsUtil.getEnchants(section).get(featherFalling), key);
+    }
+
+    @Test
     void maximumSupportedAmplifierHasMatchingRomanNumeral() {
         effects.set("amplifier_supreme", 11);
         var bonuses = EnchantsAndEffectsUtil.getPotionEffectsForItemPath("supreme_boots_supreme", effects);
