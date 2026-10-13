@@ -5,7 +5,6 @@ import com.github.relativobr.supreme.gear.SupremeSoulboundGear;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import org.bukkit.ChatColor;
-import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -110,19 +109,29 @@ public class EnchantsAndEffectsUtil {
     }
 
     @Nonnull
-    private static Map<Enchantment, Integer> getEnchants(@Nonnull ConfigurationSection section) {
-
+    static Map<Enchantment, Integer> getEnchants(@Nonnull ConfigurationSection section) {
         Map<Enchantment, Integer> enchants = new HashMap<>();
         for (String path : section.getKeys(false)) {
-            Enchantment e = Enchantment.getByKey(NamespacedKey.minecraft(path));
-            if (e != null) {
-                int level = section.getInt(path);
-                if (level > 0 && level <= 100) {
-                    enchants.put(e, level);
-                } else if (level != 0) {
-                    enchants.put(e, 1);
-                }
+            if ("unbreakable".equalsIgnoreCase(path)) {
+                continue;
             }
+
+            int level = section.getInt(path);
+            if (level == 0) {
+                continue;
+            }
+            Enchantment enchantment = SupremeEnchantmentResolver.resolve(path);
+            if (enchantment == null) {
+                Supreme plugin = Supreme.inst();
+                if (plugin != null) {
+                    plugin.log(Level.WARNING, "Unknown supreme-enchant key '" + path
+                            + "' in " + section.getCurrentPath() + "; skipping this enchantment.");
+                }
+                continue;
+            }
+
+            // Keep Supreme's historical configuration behavior for out-of-range levels.
+            enchants.put(enchantment, level > 0 && level <= 100 ? level : 1);
         }
         return enchants;
     }
