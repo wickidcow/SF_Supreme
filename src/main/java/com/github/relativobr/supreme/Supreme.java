@@ -9,6 +9,7 @@ import static com.github.relativobr.supreme.util.CompatibilySupremeLegacy.loadMa
 import com.github.relativobr.supreme.command.SupremeCommand;
 import com.github.relativobr.supreme.diagnostics.SupremeLegacyIdMappings;
 import com.github.relativobr.supreme.diagnostics.SupremeLegacyMigrationProviderBridge;
+import com.github.relativobr.supreme.gear.SupremeSoulboundCompatibilityListener;
 import com.github.relativobr.supreme.setup.MainSetup;
 import com.github.relativobr.supreme.util.CompatibilySupremeLegacyItem;
 import com.github.relativobr.supreme.util.SupremeOptions;
@@ -29,6 +30,7 @@ public class Supreme extends JavaPlugin implements SlimefunAddon {
   private static final int MAX_TECH_GENERATOR_MAX_AMOUNT = 64;
 
   private static Supreme instance;
+  private SupremeSoulboundCompatibilityListener soulboundCompatibility;
   private static SupremeOptions supremeOptions = null;
   private static SupremePowerSection supremePowerSection = null;
   private static SupremeLocalization localization = null;
@@ -191,6 +193,8 @@ public class Supreme extends JavaPlugin implements SlimefunAddon {
     }
 
     MainSetup.setup(this);
+    soulboundCompatibility = new SupremeSoulboundCompatibilityListener(this);
+    getServer().getPluginManager().registerEvents(soulboundCompatibility, this);
     SupremeLegacyIdMappings.publish(this);
     SupremeLegacyMigrationProviderBridge.register(this);
     registerSupremeCommand();
@@ -223,7 +227,12 @@ public class Supreme extends JavaPlugin implements SlimefunAddon {
   @Override
   public void onDisable() {
     SupremeLegacyMigrationProviderBridge.unregister(this);
+    soulboundCompatibility = null;
     instance = null;
+  }
+
+  public SupremeSoulboundCompatibilityListener getSoulboundCompatibility() {
+    return soulboundCompatibility;
   }
 
   @Override
