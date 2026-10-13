@@ -121,7 +121,7 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       for (PotionEffect desired : configured) {
         PotionEffect active = player.getPotionEffect(desired.getType());
         boolean present = active != null;
-        String effect = desired.getType().getKeyOrThrow().getKey().replace('_', ' ');
+        String effect = desired.getType().getKey().getKey().replace('_', ' ');
         sender.sendMessage(ChatColor.DARK_GRAY + "  " + effect + " "
             + (desired.getAmplifier() + 1) + ": "
             + (present ? ChatColor.GREEN + "active (level " + (active.getAmplifier() + 1) + ")"
