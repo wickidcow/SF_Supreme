@@ -19,6 +19,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.DirtyChestMenu;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.command.Command;
@@ -252,7 +254,8 @@ class GenericMachineRecoveryTest {
     storage.when(() -> BlockStorage.check(block)).thenReturn(machine);
     new SupremeCommand(plugin).onCommand(player, mock(Command.class), "supreme",
         new String[]{"doctor", "retry"});
-    verify(player).sendMessage(contains("Recovery remains blocked"));
+    verify(player).sendMessage(Component.text(
+        "Recovery remains blocked. The original checkpoint is still retained.", NamedTextColor.RED));
     assertEquals("unreadable-reserved-item", data.get(PREFIX + "consumed"));
     assertEquals(0, writes);
   }
