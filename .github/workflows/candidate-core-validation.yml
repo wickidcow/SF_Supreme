@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      CORE_CANDIDATE: f5656f43d220de1fac59e1492eb1f5248af129ab
+      CORE_CANDIDATE: c6e2f2eafc706d6ae0717245ead4645f1928ba7a
     steps:
       - name: Checkout combined Supreme candidate
         uses: actions/checkout@v6
@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           mvn -B -Plegacy clean verify -Dmaven.compiler.showDeprecation=true 2>&1 | tee candidate-build.log
-      - name: Verify executed action-bar tests and packaged dependencies
+      - name: Verify executed presentation tests and packaged dependencies
         shell: bash
         run: |
           set -euo pipefail
@@ -58,10 +58,15 @@ jobs:
           import xml.etree.ElementTree as ET
           import zipfile
           from pathlib import Path
-          report = Path('target/surefire-reports/TEST-com.github.relativobr.supreme.SupremeLocalizationActionBarTest.xml')
-          suite = ET.parse(report).getroot()
-          if int(suite.get('tests', '0')) < 2 or any(int(suite.get(k, '0')) for k in ('failures', 'errors', 'skipped')):
-              raise SystemExit('Action-bar color tests did not all execute successfully')
+          required = {
+              'com.github.relativobr.supreme.SupremeLocalizationActionBarTest': 2,
+              'com.github.relativobr.supreme.command.SupremeCommandTextTest': 10,
+          }
+          for name, minimum in required.items():
+              report = Path(f'target/surefire-reports/TEST-{name}.xml')
+              suite = ET.parse(report).getroot()
+              if int(suite.get('tests', '0')) < minimum or any(int(suite.get(k, '0')) for k in ('failures', 'errors', 'skipped')):
+                  raise SystemExit(f'Presentation tests did not all execute successfully: {name}')
           with zipfile.ZipFile('target/SF_Supreme1.0.20.jar') as jar:
               classes = [n for n in jar.namelist() if n.endswith('.class')]
               forbidden = ('io/github/thebusybiscuit/slimefun4/', 'org/junit/', 'org/mockito/', 'org/mockbukkit/')
@@ -70,7 +75,7 @@ jobs:
               majors = {struct.unpack('>H', jar.read(n)[6:8])[0] for n in classes}
               if 65 not in majors or any(m > 65 for m in majors):
                   raise SystemExit('Java 21 compatibility target was not preserved')
-          print('Action-bar tests executed; Java 21 target and packaging verified.')
+          print('Presentation tests executed; Java 21 target and packaging verified.')
           PY
       - name: Retain exact-source test and compiler evidence
         if: always()
