@@ -39,7 +39,7 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       @Nonnull String label, @Nonnull String[] args) {
     if (args.length == 0) {
       sender.sendMessage(ChatColor.AQUA + "Supreme Legacy " + ChatColor.WHITE
-          + plugin.getDescription().getVersion());
+          + plugin.getPluginMeta().getVersion());
       sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor recipes"
           + ChatColor.DARK_GRAY + " - audit Supreme machine recipes");
       sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor machine"
