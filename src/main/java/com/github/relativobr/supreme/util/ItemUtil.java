@@ -9,6 +9,9 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.core.attributes.Radioactivity;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.data.persistent.PersistentDataAPI;
 import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
@@ -153,26 +156,31 @@ public class ItemUtil {
     public static String buildNameTier(String newName, Integer tier) {
         switch (tier) {
             case 1:
-                return ChatColor.GRAY + newName + " I";
+                return legacyTierName(newName, " I", NamedTextColor.GRAY);
             case 2:
-                return ChatColor.DARK_GREEN + newName + " II";
+                return legacyTierName(newName, " II", NamedTextColor.DARK_GREEN);
             case 3:
-                return ChatColor.GREEN + newName + " III";
+                return legacyTierName(newName, " III", NamedTextColor.GREEN);
             case 4:
-                return ChatColor.DARK_BLUE + newName + " IV";
+                return legacyTierName(newName, " IV", NamedTextColor.DARK_BLUE);
             case 5:
-                return ChatColor.BLUE + newName + " V";
+                return legacyTierName(newName, " V", NamedTextColor.BLUE);
             case 6:
-                return ChatColor.GOLD + newName + " VI";
+                return legacyTierName(newName, " VI", NamedTextColor.GOLD);
             case 7:
-                return ChatColor.YELLOW + newName + " VII";
+                return legacyTierName(newName, " VII", NamedTextColor.YELLOW);
             case 8:
-                return ChatColor.DARK_RED + newName + " VIII";
+                return legacyTierName(newName, " VIII", NamedTextColor.DARK_RED);
             case 9:
-                return ChatColor.DARK_PURPLE + newName + " IX";
+                return legacyTierName(newName, " IX", NamedTextColor.DARK_PURPLE);
             default:
-                return ChatColor.DARK_GRAY + newName;
+                return legacyTierName(newName, "", NamedTextColor.DARK_GRAY);
         }
+    }
+
+    /** Construct new template labels using the same section colors as the historical String API. */
+    private static String legacyTierName(String name, String suffix, NamedTextColor color) {
+        return LegacyComponentSerializer.legacySection().serialize(Component.text(name + suffix, color));
     }
 
     public static String buildIdTier(String newName, Integer tier) {
