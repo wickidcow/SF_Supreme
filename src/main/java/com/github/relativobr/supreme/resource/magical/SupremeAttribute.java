@@ -6,8 +6,6 @@ import com.github.relativobr.supreme.util.SupremeItemStack;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import lombok.experimental.UtilityClass;
 import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
-import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 
 @UtilityClass
@@ -81,10 +79,7 @@ public class SupremeAttribute {
     return attributeImpetus;
   }
   private static void addEnchantment(ItemStack item, String key, int level) {
-    Enchantment enchantment = Enchantment.getByKey(NamespacedKey.minecraft(key));
-    if (enchantment != null) {
-      item.addUnsafeEnchantment(enchantment, level);
-    }
+    SupremeAttributeEnchantments.apply(item, key, level);
   }
 
 }
