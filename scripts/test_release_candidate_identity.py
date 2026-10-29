@@ -14,6 +14,7 @@ class SupremeVersionCandidateContract(unittest.TestCase):
     def setUpClass(cls):
         cls.pom = (ROOT / "pom.xml").read_text(encoding="utf-8")
         cls.workflow = (ROOT / ".github/workflows/maven.yml").read_text(encoding="utf-8")
+        cls.candidate_workflow = (ROOT / ".github/workflows/candidate-core-validation.yml").read_text(encoding="utf-8")
         cls.agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         cls.changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
         cls.notes = (ROOT / "docs/releases/1.0.21.md").read_text(encoding="utf-8")
@@ -24,6 +25,10 @@ class SupremeVersionCandidateContract(unittest.TestCase):
         self.assertIn(f'OUTPUT_NAME: "{JAR}"', self.workflow)
         self.assertIn(f"target/{JAR}", self.agents)
         self.assertIn("unpublished candidate", self.agents)
+
+    def test_candidate_core_uses_distinct_release_jar(self):
+        self.assertIn(f"with zipfile.ZipFile(\'target/{JAR}\')", self.candidate_workflow)
+        self.assertNotIn("SF_Supreme1.0.20.jar", self.candidate_workflow)
 
     def test_plugin_descriptor_still_receives_release_version(self):
         yml = (ROOT / "src/main/resources/plugin.yml").read_text(encoding="utf-8")

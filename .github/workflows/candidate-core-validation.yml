@@ -69,7 +69,7 @@ jobs:
               suite = ET.parse(report).getroot()
               if int(suite.get('tests', '0')) < minimum or any(int(suite.get(k, '0')) for k in ('failures', 'errors', 'skipped')):
                   raise SystemExit(f'Presentation tests did not all execute successfully: {name}')
-          with zipfile.ZipFile('target/SF_Supreme1.0.20.jar') as jar:
+          with zipfile.ZipFile('target/SF_Supreme1.0.21.jar') as jar:
               classes = [n for n in jar.namelist() if n.endswith('.class')]
               forbidden = ('io/github/thebusybiscuit/slimefun4/', 'org/junit/', 'org/mockito/', 'org/mockbukkit/')
               if any(n.startswith(forbidden) for n in classes):
