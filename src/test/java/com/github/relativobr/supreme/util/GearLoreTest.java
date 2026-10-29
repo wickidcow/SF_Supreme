@@ -27,6 +27,14 @@ class GearLoreTest {
     @AfterEach void tearDown() { MockBukkit.unmock(); }
 
     @Test
+    void generatedGearColorsKeepTheExactHistoricalSectionCodes() {
+        assertEquals("\u00a77Soulbound", GearLore.coloredLegacyText("Soulbound", NamedTextColor.GRAY));
+        assertEquals("\u00a75Strength II", GearLore.coloredLegacyText("Strength II", NamedTextColor.DARK_PURPLE));
+        assertEquals("\u00a75Dolphin's Grace XI",
+                GearLore.coloredLegacyText("Dolphin's Grace XI", NamedTextColor.DARK_PURPLE));
+    }
+
+    @Test
     void richItemLoreIsRetainedExactly() {
         ItemMeta meta = meta(); var before = rich(); meta.lore(before);
         GearLore.append(meta, List.of("\u00a7bSoulbound", "\u00a75Strength II"));
