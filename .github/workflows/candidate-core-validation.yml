@@ -61,7 +61,7 @@ jobs:
           required = {
               'com.github.relativobr.supreme.SupremeLocalizationActionBarTest': 2,
               'com.github.relativobr.supreme.command.SupremeCommandTextTest': 10,
-              'com.github.relativobr.supreme.generic.electric.EnergyGeneratorDisplayedChargeTest': 9,
+              'com.github.relativobr.supreme.generic.electric.EnergyGeneratorDisplayedChargeTest': 10,
           }
           for name, minimum in required.items():
               report = Path(f'target/surefire-reports/TEST-{name}.xml')

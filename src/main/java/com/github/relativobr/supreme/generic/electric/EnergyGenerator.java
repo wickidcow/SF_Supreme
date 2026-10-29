@@ -7,9 +7,12 @@ import com.github.relativobr.supreme.util.UtilEnergy;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
+import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.blocks.BlockPosition;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nonnull;
@@ -24,6 +27,8 @@ import org.bukkit.inventory.ItemStack;
 
 /** Energy generator whose cached generation state is isolated per placed block. */
 public final class EnergyGenerator extends MenuBlock implements SupremeEnergyProvider {
+
+  private static final Method LONG_CHARGE_ACCESSOR = findLongChargeAccessor();
 
   private final Map<BlockPosition, Integer> generatedOutput = new ConcurrentHashMap<>();
   private final Map<BlockPosition, Integer> currentDelay = new ConcurrentHashMap<>();
@@ -109,7 +114,7 @@ public final class EnergyGenerator extends MenuBlock implements SupremeEnergyPro
     if (menu != null && menu.hasViewer()) {
       // Preserve the historical int-clamped status text. The persisted balance
       // and the generator's output/cadence remain completely untouched.
-      int shownCharge = legacyDisplayedCharge(getChargeLong(location));
+      int shownCharge = readDisplayedCharge(this, location);
       if (generation == 0) {
         menu.replaceExistingItem(13, new CustomItemStack(
             Material.RED_STAINED_GLASS_PANE,
@@ -131,9 +136,50 @@ public final class EnergyGenerator extends MenuBlock implements SupremeEnergyPro
   }
 
   /**
-   * Mirrors Slimefun Legacy's original getCharge(Location) int clamp for
-   * display text. Do not widen the GUI value or modify any stored charge.
-   * This is intentionally package-private for regression testing only.
+   * Newer Legacy/United cores expose a long-valued charge reader; older Gugu
+   * releases do not. Resolve this optional descriptor once rather than linking
+   * to a method absent from an otherwise supported API at load time.
+   */
+  private static Method findLongChargeAccessor() {
+    try {
+      Method method = EnergyNetComponent.class.getMethod("getChargeLong", Location.class);
+      return method.getReturnType() == long.class ? method : null;
+    } catch (NoSuchMethodException ignored) {
+      return null;
+    }
+  }
+
+  /**
+   * Read-only menu presentation: never change the stored balance or the
+   * legacy signed-int display limit, irrespective of the Slimefun fork.
+   */
+  static int readDisplayedCharge(EnergyNetComponent component, Location location) {
+    return readDisplayedCharge(component, location, LONG_CHARGE_ACCESSOR);
+  }
+
+  // The injected reader permits a direct regression test of the historical
+  // Gugu fallback without changing the actual runtime lookup policy.
+  static int readDisplayedCharge(EnergyNetComponent component, Location location, Method reader) {
+    if (reader == null) {
+      return legacyIntCharge(component, location);
+    }
+    try {
+      return legacyDisplayedCharge(((Number) reader.invoke(component, location)).longValue());
+    } catch (IllegalAccessException | InvocationTargetException ex) {
+      throw new IllegalStateException("Unable to read generator charge for display", ex);
+    }
+  }
+
+  // Older forks cannot link getChargeLong; retain their historical int API only
+  // at this isolated compatibility boundary. Do not remove the fallback.
+  @SuppressWarnings("deprecation")
+  private static int legacyIntCharge(EnergyNetComponent component, Location location) {
+    return component.getCharge(location);
+  }
+
+  /**
+   * Mirrors Slimefun Legacy's original getCharge(Location) signed-int clamp
+   * for display only. Never modify the underlying energy balance.
    */
   static int legacyDisplayedCharge(long charge) {
     return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, charge));
