@@ -35,7 +35,9 @@ import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ChestMenu;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -197,11 +199,11 @@ public class AbstractQuarry extends SlimefunItem implements EnergyNetComponent {
 
     if (energyCharge < getEnergyConsumption() || !enabled) {
       menu.addItem(InventoryRecipe.QUARRY_STATUS,
-          new CustomItemStack(Material.OBSIDIAN, ChatColor.RED + "NOT-ACTIVE", powerPerSecond,
+          new CustomItemStack(Material.OBSIDIAN, statusText(false), powerPerSecond,
               powerCharged, infoSpeed));
     } else {
       menu.addItem(InventoryRecipe.QUARRY_STATUS,
-          new CustomItemStack(Material.GLOWSTONE, ChatColor.GREEN + "ACTIVE", powerPerSecond,
+          new CustomItemStack(Material.GLOWSTONE, statusText(true), powerPerSecond,
               powerCharged, infoSpeed));
     }
     menu.addMenuClickHandler(InventoryRecipe.QUARRY_STATUS,
@@ -229,6 +231,13 @@ public class AbstractQuarry extends SlimefunItem implements EnergyNetComponent {
 
     player.playSound(player.getLocation(), Sound.BLOCK_BARREL_OPEN, 1, 1);
     menu.open(player);
+  }
+
+  /** Historical §a/§c GUI status text without the deprecated Bukkit ChatColor formatter. */
+  static String statusText(boolean active) {
+    return LegacyComponentSerializer.legacySection().serialize(
+        Component.text(active ? "ACTIVE" : "NOT-ACTIVE",
+            active ? NamedTextColor.GREEN : NamedTextColor.RED));
   }
 
   protected boolean isInvalidInventory(@Nonnull Block block) {
