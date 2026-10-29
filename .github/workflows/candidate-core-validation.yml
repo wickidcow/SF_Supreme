@@ -62,6 +62,7 @@ jobs:
               'com.github.relativobr.supreme.SupremeLocalizationActionBarTest': 2,
               'com.github.relativobr.supreme.command.SupremeCommandTextTest': 10,
               'com.github.relativobr.supreme.generic.electric.EnergyGeneratorDisplayedChargeTest': 10,
+              'com.github.relativobr.supreme.libs.guizhanlib.utils.ChatUtilCompatibilityTest': 24,
           }
           for name, minimum in required.items():
               report = Path(f'target/surefire-reports/TEST-{name}.xml')
@@ -76,6 +77,9 @@ jobs:
               majors = {struct.unpack('>H', jar.read(n)[6:8])[0] for n in classes}
               if 65 not in majors or any(m > 65 for m in majors):
                   raise SystemExit('Java 21 compatibility target was not preserved')
+              chat_util = jar.read('com/github/relativobr/supreme/libs/guizhanlib/utils/ChatUtil.class')
+              if b'org/bukkit/ChatColor' in chat_util:
+                  raise SystemExit('ChatUtil still links to deprecated Bukkit ChatColor')
           warnings = Path('candidate-build.log').read_text(encoding='utf-8').splitlines()
           stale_reads = [line for line in warnings
               if 'EnergyGenerator.java:' in line
@@ -83,7 +87,10 @@ jobs:
               and 'deprecated' in line]
           if stale_reads:
               raise SystemExit('Deprecated generator GUI reads returned:\n' + '\n'.join(stale_reads))
-          print('Presentation and charge parity tests executed; no deprecated generator GUI reads; Java 21 target and packaging verified.')
+          stale_colors = [line for line in warnings if 'ChatUtil.java:' in line and 'deprecated' in line]
+          if stale_colors:
+              raise SystemExit('Deprecated ChatUtil translation returned:\n' + '\n'.join(stale_colors))
+          print('Presentation and charge parity tests executed; targeted deprecations absent; Java 21 target and packaging verified.')
           PY
       - name: Retain exact-source test and compiler evidence
         if: always()
