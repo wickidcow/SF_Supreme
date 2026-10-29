@@ -1,0 +1,89 @@
+name: Supreme Combined Candidate Core Validation
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CORE_CANDIDATE: f505b9f79e8e4598eedf1160b0831dbec758eb78
+    steps:
+      - name: Checkout combined Supreme candidate
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Checkout exact Slimefun core candidate
+        uses: actions/checkout@v6
+        with:
+          repository: wickidcow/Slimefun-Legacy
+          ref: ${{ env.CORE_CANDIDATE }}
+          path: .deps/Slimefun-Legacy
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install checksum-verified Maven
+        run: bash scripts/install_maven_3_10.sh
+      - name: Verify source identity and preservation contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C .deps/Slimefun-Legacy rev-parse HEAD)" = "$CORE_CANDIDATE"
+          printf 'Supreme checkout: %s\nCore: %s\n' "$(git rev-parse HEAD)" "$CORE_CANDIDATE" >> "$GITHUB_STEP_SUMMARY"
+          bash scripts/verify-supreme-invariants.sh .
+          bash scripts/verify-doctor-migration.sh .
+      - name: Build exact core API locally
+        working-directory: .deps/Slimefun-Legacy
+        run: |
+          chmod +x gradlew
+          ./gradlew publishToMavenLocal -PprojectVersion=Legacy-SNAPSHOT --no-daemon
+      - name: Test combined Supreme on the Java 21 release baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B -Plegacy clean verify -Dmaven.compiler.showDeprecation=true 2>&1 | tee candidate-build.log
+      - name: Verify executed presentation tests and packaged dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import struct
+          import xml.etree.ElementTree as ET
+          import zipfile
+          from pathlib import Path
+          required = {
+              'com.github.relativobr.supreme.SupremeLocalizationActionBarTest': 2,
+              'com.github.relativobr.supreme.command.SupremeCommandTextTest': 10,
+          }
+          for name, minimum in required.items():
+              report = Path(f'target/surefire-reports/TEST-{name}.xml')
+              suite = ET.parse(report).getroot()
+              if int(suite.get('tests', '0')) < minimum or any(int(suite.get(k, '0')) for k in ('failures', 'errors', 'skipped')):
+                  raise SystemExit(f'Presentation tests did not all execute successfully: {name}')
+          with zipfile.ZipFile('target/SF_Supreme1.0.20.jar') as jar:
+              classes = [n for n in jar.namelist() if n.endswith('.class')]
+              forbidden = ('io/github/thebusybiscuit/slimefun4/', 'org/junit/', 'org/mockito/', 'org/mockbukkit/')
+              if any(n.startswith(forbidden) for n in classes):
+                  raise SystemExit('Core or test dependencies leaked into the plugin JAR')
+              majors = {struct.unpack('>H', jar.read(n)[6:8])[0] for n in classes}
+              if 65 not in majors or any(m > 65 for m in majors):
+                  raise SystemExit('Java 21 compatibility target was not preserved')
+          print('Presentation tests executed; Java 21 target and packaging verified.')
+          PY
+      - name: Retain exact-source test and compiler evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: supreme-candidate-core-evidence
+          path: |
+            candidate-build.log
+            target/surefire-reports/TEST-*.xml
+          retention-days: 14
+          if-no-files-found: warn

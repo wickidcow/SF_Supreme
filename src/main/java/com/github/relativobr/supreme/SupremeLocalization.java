@@ -7,9 +7,8 @@ import javax.annotation.ParametersAreNonnullByDefault;
 import com.github.relativobr.supreme.libs.guizhanlib.localization.Localization;
 import com.github.relativobr.supreme.libs.guizhanlib.utils.ChatUtil;
 import com.github.relativobr.supreme.libs.guizhanlib.utils.StringUtil;
-import net.md_5.bungee.api.ChatMessageType;
-import net.md_5.bungee.api.chat.BaseComponent;
-import net.md_5.bungee.api.chat.TextComponent;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import io.github.thebusybiscuit.slimefun4.libraries.commons.lang.Validate;
 import org.bukkit.entity.Player;
 
@@ -68,8 +67,13 @@ public class SupremeLocalization extends Localization {
 
     String message = MessageFormat.format(getString("messages." + messageKey), args);
 
-    BaseComponent[] components = TextComponent.fromLegacyText(ChatUtil.color(message));
-    p.spigot().sendMessage(ChatMessageType.ACTION_BAR, components);
+    p.sendActionBar(actionBarComponent(message));
+  }
+
+  // Keep the existing localization, placeholder and legacy color-code interpretation;
+  // only the actual action-bar transport moves from the Bungee bridge to Adventure.
+  static Component actionBarComponent(String message) {
+    return LegacyComponentSerializer.legacySection().deserialize(ChatUtil.color(message));
   }
 
 }

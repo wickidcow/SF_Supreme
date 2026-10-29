@@ -14,7 +14,8 @@ import java.util.List;
 import java.util.Locale;
 import javax.annotation.Nonnull;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -28,6 +29,16 @@ import org.bukkit.potion.PotionEffect;
 public final class SupremeCommand implements CommandExecutor, TabCompleter {
 
   private static final int MAX_FINDINGS_IN_CHAT = 25;
+  // These private wire-format tokens preserve the existing transient messages and
+  // any section-coded text supplied by diagnostic providers. They are never saved.
+  private static final String AQUA = "\u00a7b";
+  private static final String WHITE = "\u00a7f";
+  private static final String GRAY = "\u00a77";
+  private static final String DARK_GRAY = "\u00a78";
+  private static final String RED = "\u00a7c";
+  private static final String GREEN = "\u00a7a";
+  private static final String YELLOW = "\u00a7e";
+  private static final LegacyComponentSerializer COMMAND_TEXT = LegacyComponentSerializer.legacySection();
   private final Supreme plugin;
 
   public SupremeCommand(Supreme plugin) {
@@ -38,24 +49,24 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
   public boolean onCommand(@Nonnull CommandSender sender, @Nonnull Command command,
       @Nonnull String label, @Nonnull String[] args) {
     if (args.length == 0) {
-      sender.sendMessage(ChatColor.AQUA + "Supreme Legacy " + ChatColor.WHITE
-          + plugin.getDescription().getVersion());
-      sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor recipes"
-          + ChatColor.DARK_GRAY + " - audit Supreme machine recipes");
-      sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor machine"
-          + ChatColor.DARK_GRAY + " - inspect the Supreme machine you are looking at");
-      sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor retry"
-          + ChatColor.DARK_GRAY + " - re-read a blocked machine checkpoint after repair");
-      sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor soulbound"
-          + ChatColor.DARK_GRAY + " - inspect Supreme gear held in your main hand");
-      sender.sendMessage(ChatColor.GRAY + "/" + label + " doctor armor"
-          + ChatColor.DARK_GRAY + " - inspect worn Supreme armor effects and protection");
+      send(sender, AQUA + "Supreme Legacy " + WHITE
+          + plugin.getPluginMeta().getVersion());
+      send(sender, GRAY + "/" + label + " doctor recipes"
+          + DARK_GRAY + " - audit Supreme machine recipes");
+      send(sender, GRAY + "/" + label + " doctor machine"
+          + DARK_GRAY + " - inspect the Supreme machine you are looking at");
+      send(sender, GRAY + "/" + label + " doctor retry"
+          + DARK_GRAY + " - re-read a blocked machine checkpoint after repair");
+      send(sender, GRAY + "/" + label + " doctor soulbound"
+          + DARK_GRAY + " - inspect Supreme gear held in your main hand");
+      send(sender, GRAY + "/" + label + " doctor armor"
+          + DARK_GRAY + " - inspect worn Supreme armor effects and protection");
       return true;
     }
 
     if (args.length >= 2 && args[0].equalsIgnoreCase("doctor")) {
       if (!sender.hasPermission("supreme.admin")) {
-        sender.sendMessage(ChatColor.RED + "You do not have permission to run Supreme diagnostics.");
+        send(sender, RED + "You do not have permission to run Supreme diagnostics.");
         return true;
       }
 
@@ -81,22 +92,32 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       }
     }
 
-    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " doctor <recipes|machine|retry|soulbound|armor>");
+    send(sender, RED + "Usage: /" + label + " doctor <recipes|machine|retry|soulbound|armor>");
     return true;
+  }
+
+  private static void send(CommandSender sender, String message) {
+    sender.sendMessage(commandMessage(message));
+  }
+
+  // A compatibility boundary for command output only: never reinterpret ampersands,
+  // MiniMessage tags, item lore or persisted records while modernizing the transport.
+  static Component commandMessage(String message) {
+    return COMMAND_TEXT.deserialize(message);
   }
 
   private void runArmorDoctor(CommandSender sender) {
     if (!(sender instanceof Player player)) {
-      sender.sendMessage(ChatColor.RED + "Wear Supreme armor to inspect its potion effects.");
+      send(sender, RED + "Wear Supreme armor to inspect its potion effects.");
       return;
     }
 
     boolean coreEffectsEnabled = Slimefun.getCfg().getBoolean("options.enable-armor-effects");
     int refreshSeconds = Slimefun.getCfg().getInt("options.armor-update-interval");
-    sender.sendMessage(ChatColor.AQUA + "Supreme Armor Effects Doctor");
-    sender.sendMessage(ChatColor.GRAY + "Slimefun armor effects: "
-        + (coreEffectsEnabled ? ChatColor.GREEN + "enabled" : ChatColor.RED + "disabled")
-        + ChatColor.GRAY + " | Refresh: " + ChatColor.WHITE + refreshSeconds + "s");
+    send(sender, AQUA + "Supreme Armor Effects Doctor");
+    send(sender, GRAY + "Slimefun armor effects: "
+        + (coreEffectsEnabled ? GREEN + "enabled" : RED + "disabled")
+        + GRAY + " | Refresh: " + WHITE + refreshSeconds + "s");
 
     String[] slots = {"Boots", "Leggings", "Chestplate", "Helmet"};
     ItemStack[] worn = player.getInventory().getArmorContents();
@@ -105,41 +126,41 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       ItemStack stack = worn[i];
       SlimefunItem sfItem = SlimefunItem.getByItem(stack);
       if (!(sfItem instanceof AbstractArmor armor)) {
-        sender.sendMessage(ChatColor.GRAY + slots[i] + ": " + ChatColor.DARK_GRAY
+        send(sender, GRAY + slots[i] + ": " + DARK_GRAY
             + "not recognized as Supreme armor");
         continue;
       }
       detected++;
       boolean allowed = armor.canUse(player, false) && !armor.isDisabledIn(player.getWorld());
-      sender.sendMessage(ChatColor.GRAY + slots[i] + ": " + ChatColor.WHITE + armor.getId()
-          + (allowed ? "" : ChatColor.RED + " [unavailable in this world / not unlocked]"));
+      send(sender, GRAY + slots[i] + ": " + WHITE + armor.getId()
+          + (allowed ? "" : RED + " [unavailable in this world / not unlocked]"));
       PotionEffect[] configured = armor.getPotionEffects();
       if (configured.length == 0) {
-        sender.sendMessage(ChatColor.DARK_GRAY + "  No potion bonuses for this armor tier.");
+        send(sender, DARK_GRAY + "  No potion bonuses for this armor tier.");
       }
       for (PotionEffect desired : configured) {
         PotionEffect active = player.getPotionEffect(desired.getType());
         boolean present = active != null;
         String effect = desired.getType().getKey().getKey().replace('_', ' ');
-        sender.sendMessage(ChatColor.DARK_GRAY + "  " + effect + " "
+        send(sender, DARK_GRAY + "  " + effect + " "
             + (desired.getAmplifier() + 1) + ": "
-            + (present ? ChatColor.GREEN + "active (level " + (active.getAmplifier() + 1) + ")"
-                       : ChatColor.YELLOW + "not active"));
+            + (present ? GREEN + "active (level " + (active.getAmplifier() + 1) + ")"
+                       : YELLOW + "not active"));
       }
     }
 
     if (detected == 0) {
-      sender.sendMessage(ChatColor.YELLOW
+      send(sender, YELLOW
           + "No registered Supreme armor detected. Check the saved item IDs and compatibility settings.");
       return;
     }
-    sender.sendMessage(ChatColor.GRAY + "Matching four-piece Supreme set (radiation): "
+    send(sender, GRAY + "Matching four-piece Supreme set (radiation): "
         + status(hasCompleteSet(player, ProtectionType.RADIATION)));
-    sender.sendMessage(ChatColor.GRAY + "Matching four-piece Supreme set (bees): "
+    send(sender, GRAY + "Matching four-piece Supreme set (bees): "
         + status(hasCompleteSet(player, ProtectionType.BEES)));
-    sender.sendMessage(ChatColor.GRAY + "Matching four-piece Supreme set (elytra collision): "
+    send(sender, GRAY + "Matching four-piece Supreme set (elytra collision): "
         + status(hasCompleteSet(player, ProtectionType.FLYING_INTO_WALL)));
-    sender.sendMessage(ChatColor.DARK_GRAY
+    send(sender, DARK_GRAY
         + "Active status includes effects from other plugins/potions; it does not prove their source.");
   }
 
@@ -164,18 +185,18 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
   }
 
   private static String status(boolean enabled) {
-    return enabled ? ChatColor.GREEN + "yes" : ChatColor.YELLOW + "no";
+    return enabled ? GREEN + "yes" : YELLOW + "no";
   }
 
   private void runSoulboundDoctor(CommandSender sender) {
     if (!(sender instanceof Player player)) {
-      sender.sendMessage(ChatColor.RED + "Hold Supreme gear in your main hand to inspect its soulbound status.");
+      send(sender, RED + "Hold Supreme gear in your main hand to inspect its soulbound status.");
       return;
     }
 
     ItemStack held = player.getInventory().getItemInMainHand();
     if (held.getType().isAir()) {
-      sender.sendMessage(ChatColor.RED + "Hold the Supreme armor, weapon or tool in your main hand.");
+      send(sender, RED + "Hold the Supreme armor, weapon or tool in your main hand.");
       return;
     }
 
@@ -184,46 +205,46 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
     boolean historical = plugin.getSoulboundCompatibility().isHistoricalGear(held);
     boolean bound = SlimefunUtils.isSoulbound(held, player.getWorld());
 
-    sender.sendMessage(ChatColor.AQUA + "Supreme Soulbound Doctor");
-    sender.sendMessage(ChatColor.GRAY + "Saved ID: " + ChatColor.WHITE + savedId);
-    sender.sendMessage(ChatColor.GRAY + "Registered Supreme gear: "
-        + (recognized ? ChatColor.GREEN + "yes" : ChatColor.RED + "no"));
-    sender.sendMessage(ChatColor.GRAY + "Historical Supreme ID: "
-        + (historical ? ChatColor.YELLOW + "yes" : ChatColor.WHITE + "no"));
-    sender.sendMessage(ChatColor.GRAY + "Slimefun soulbound in this world: "
-        + (bound ? ChatColor.GREEN + "yes" : ChatColor.RED + "no"));
+    send(sender, AQUA + "Supreme Soulbound Doctor");
+    send(sender, GRAY + "Saved ID: " + WHITE + savedId);
+    send(sender, GRAY + "Registered Supreme gear: "
+        + (recognized ? GREEN + "yes" : RED + "no"));
+    send(sender, GRAY + "Historical Supreme ID: "
+        + (historical ? YELLOW + "yes" : WHITE + "no"));
+    send(sender, GRAY + "Slimefun soulbound in this world: "
+        + (bound ? GREEN + "yes" : RED + "no"));
     if (!bound && !recognized) {
-      sender.sendMessage(ChatColor.YELLOW
+      send(sender, YELLOW
           + "This item cannot be safely recovered from its display lore alone. Check the saved item ID.");
     } else if (!bound) {
-      sender.sendMessage(ChatColor.YELLOW
+      send(sender, YELLOW
           + "A recognized old gear ID can be given Slimefun's native tag by the death compatibility handler.");
     }
   }
 
   private void runRecipeDoctor(CommandSender sender) {
     SupremeRecipeDoctor.Report report = SupremeRecipeDoctor.scan();
-    sender.sendMessage(ChatColor.AQUA + "Supreme Recipe Doctor");
-    sender.sendMessage(ChatColor.GRAY + "Recipe groups: " + ChatColor.WHITE + report.groups()
-        + ChatColor.GRAY + " | Recipes: " + ChatColor.WHITE + report.recipes());
-    sender.sendMessage(ChatColor.GRAY + "Errors: "
-        + (report.errors() == 0 ? ChatColor.GREEN : ChatColor.RED) + report.errors()
-        + ChatColor.GRAY + " | Warnings: "
-        + (report.warnings() == 0 ? ChatColor.GREEN : ChatColor.YELLOW) + report.warnings());
+    send(sender, AQUA + "Supreme Recipe Doctor");
+    send(sender, GRAY + "Recipe groups: " + WHITE + report.groups()
+        + GRAY + " | Recipes: " + WHITE + report.recipes());
+    send(sender, GRAY + "Errors: "
+        + (report.errors() == 0 ? GREEN : RED) + report.errors()
+        + GRAY + " | Warnings: "
+        + (report.warnings() == 0 ? GREEN : YELLOW) + report.warnings());
 
     if (report.findings().isEmpty()) {
-      sender.sendMessage(ChatColor.GREEN + "All audited Supreme recipes passed validation.");
+      send(sender, GREEN + "All audited Supreme recipes passed validation.");
       return;
     }
 
     int shown = Math.min(MAX_FINDINGS_IN_CHAT, report.findings().size());
     for (int i = 0; i < shown; i++) {
       String finding = report.findings().get(i);
-      ChatColor color = finding.startsWith("ERROR") ? ChatColor.RED : ChatColor.YELLOW;
-      sender.sendMessage(color + finding);
+      String color = finding.startsWith("ERROR") ? RED : YELLOW;
+      send(sender, color + finding);
     }
     if (report.findings().size() > shown) {
-      sender.sendMessage(ChatColor.GRAY + "...and " + (report.findings().size() - shown)
+      send(sender, GRAY + "...and " + (report.findings().size() - shown)
           + " more finding(s). See the server log for the full audit.");
     }
     plugin.logRecipeDoctor(report);
@@ -232,26 +253,26 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
   @SuppressWarnings("deprecation")
   private void runMachineDoctor(CommandSender sender, boolean retry) {
     if (!(sender instanceof Player player)) {
-      sender.sendMessage(ChatColor.RED + "Machine Doctor must be run by a player looking at a block.");
+      send(sender, RED + "Machine Doctor must be run by a player looking at a block.");
       return;
     }
 
     Block target = player.getTargetBlockExact(8);
     if (target == null) {
-      sender.sendMessage(ChatColor.RED + "Look directly at a Supreme machine within 8 blocks.");
+      send(sender, RED + "Look directly at a Supreme machine within 8 blocks.");
       return;
     }
 
     SlimefunItem item = BlockStorage.check(target);
     if (retry) {
       if (!(item instanceof GenericMachine machine)) {
-        sender.sendMessage(ChatColor.RED + "That block does not support Supreme checkpoint recovery.");
+        send(sender, RED + "That block does not support Supreme checkpoint recovery.");
         return;
       }
       boolean readable = machine.retryMachineRecovery(target);
-      sender.sendMessage(readable
-          ? ChatColor.GREEN + "Checkpoint is readable. Normal machine ticking can resume."
-          : ChatColor.RED + "Recovery remains blocked. The original checkpoint is still retained.");
+      send(sender, readable
+          ? GREEN + "Checkpoint is readable. Normal machine ticking can resume."
+          : RED + "Recovery remains blocked. The original checkpoint is still retained.");
     }
     List<String> diagnosticLines;
     if (item instanceof SupremeMachineDiagnostics diagnostics) {
@@ -259,16 +280,16 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
     } else if (item instanceof GenericMachine machine) {
       diagnosticLines = machine.getMachineDiagnosticLines(target);
     } else {
-      sender.sendMessage(ChatColor.RED
+      send(sender, RED
           + "That block is not a Supreme machine supported by Machine Doctor.");
       return;
     }
 
-    sender.sendMessage(ChatColor.AQUA + "Supreme Machine Doctor");
-    sender.sendMessage(ChatColor.GRAY + target.getWorld().getName() + " "
+    send(sender, AQUA + "Supreme Machine Doctor");
+    send(sender, GRAY + target.getWorld().getName() + " "
         + target.getX() + "," + target.getY() + "," + target.getZ());
     for (String line : diagnosticLines) {
-      sender.sendMessage(ChatColor.GRAY + line);
+      send(sender, GRAY + line);
     }
   }
 

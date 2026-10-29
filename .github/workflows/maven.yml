@@ -37,6 +37,8 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+      - name: Install checksum-verified Apache Maven 3.10.0
+        run: bash scripts/install_maven_3_10.sh
       - name: Verify canonical release identity
         shell: bash
         run: |
@@ -112,6 +114,8 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+      - name: Install checksum-verified Apache Maven 3.10.0
+        run: bash scripts/install_maven_3_10.sh
       - name: Publish Slimefun Legacy API locally
         working-directory: slimefun-legacy
         run: |
@@ -131,6 +135,8 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Install checksum-verified Apache Maven 3.10.0
+        run: bash scripts/install_maven_3_10.sh
       - name: Compile against Gugu API
         run: mvn -B -Pgugu -DskipTests clean package
 
@@ -149,6 +155,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Install checksum-verified Apache Maven 3.10.0
+        run: bash scripts/install_maven_3_10.sh
       - name: Build Slimefun United API jar
         working-directory: slimefun-united
         run: |
