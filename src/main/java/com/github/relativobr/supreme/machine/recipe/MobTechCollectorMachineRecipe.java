@@ -32,7 +32,7 @@ public class MobTechCollectorMachineRecipe extends MachineRecipe implements Pred
   }
 
   public static List<ItemStack> getAllRecipe() {
-    List<ItemStack> displayRecipes = new ArrayList();
+    List<ItemStack> displayRecipes = new ArrayList<>();
     SupremeOptions supremeOptions = Supreme.getSupremeOptions();
     if (supremeOptions.isMobTechEnableBee()) {
       displayRecipes.add(

@@ -125,7 +125,7 @@ public class Foundry extends GenericMachine {
   @Nonnull
   @Override
   public List<ItemStack> getDisplayRecipes() {
-    List<ItemStack> displayRecipes = new ArrayList();
+    List<ItemStack> displayRecipes = new ArrayList<>();
     machineRecipes
         .stream().filter(Objects::nonNull)
         .forEach(recipe -> {

@@ -17,7 +17,7 @@ public class VirtualAquariumMachineRecipe extends MachineRecipe {
   }
 
   public static List<ItemStack> getAllRecipe() {
-    List<ItemStack> displayRecipes = new ArrayList();
+    List<ItemStack> displayRecipes = new ArrayList<>();
     displayRecipes.add(new CustomItemStack(Material.FISHING_ROD, null, "&fGive &bSponge &f2%"));
     displayRecipes.add(new ItemStack(Material.SPONGE));
     displayRecipes.add(new CustomItemStack(Material.FISHING_ROD, null, "&fGive &bSea Lantern &f2%"));
