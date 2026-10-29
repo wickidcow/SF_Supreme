@@ -18,7 +18,6 @@ import java.util.logging.Level;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.plugin.ServicePriority;
 
 /** Optional reflective bridge into Slimefun Legacy's exact placed-block migration API. */
 public final class SupremeLegacyBlockMigrationProviderBridge {
@@ -64,9 +63,8 @@ public final class SupremeLegacyBlockMigrationProviderBridge {
             case "equals" -> self == (args == null || args.length == 0 ? null : args[0]);
             default -> null;
           });
-      @SuppressWarnings({"rawtypes", "unchecked"})
-      Class raw = providerClass;
-      plugin.getServer().getServicesManager().register(raw, proxy, plugin, ServicePriority.Normal);
+      LegacyProviderRegistration.register(
+          plugin.getServer().getServicesManager(), providerClass, proxy, plugin);
       registered = true;
       plugin.log(Level.INFO, "Registered exact Supreme placed-block migration with Slimefun Doctor.");
     } catch (ClassNotFoundException ignored) {
