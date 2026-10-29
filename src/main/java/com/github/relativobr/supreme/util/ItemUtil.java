@@ -273,16 +273,18 @@ public class ItemUtil {
             case ROBOTIC_ACCELERATION:
             case MUTATION_INTELLIGENCE:
             case ROBOTIC_EFFICIENCY:
-                return ChatColor.GRAY + "Value process " + ChatColor.YELLOW
-                        + "(" + tierString + " * amount stack * 0.15625)";
+                return legacyColoredText("Value process ", NamedTextColor.GRAY)
+                        + legacyColoredText("(" + tierString + " * amount stack * 0.15625)",
+                                NamedTextColor.YELLOW);
             case MUTATION_LUCK:
             case ROBOTIC_CLONING:
-                return ChatColor.GRAY + "Value process " + ChatColor.YELLOW
-                        + "(" + Supreme.getSupremeOptions().getMaxAmountTechGenerator() + "x per stack)";
+                return legacyColoredText("Value process ", NamedTextColor.GRAY)
+                        + legacyColoredText("(" + Supreme.getSupremeOptions().getMaxAmountTechGenerator()
+                                + "x per stack)", NamedTextColor.YELLOW);
             case SIMPLE:
             default:
-                return ChatColor.GRAY + "Value process " + ChatColor.YELLOW
-                        + "(amount stack * 0.15625)";
+                return legacyColoredText("Value process ", NamedTextColor.GRAY)
+                        + legacyColoredText("(amount stack * 0.15625)", NamedTextColor.YELLOW);
         }
     }
 
