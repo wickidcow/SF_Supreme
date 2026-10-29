@@ -1,9 +1,10 @@
 package com.github.relativobr.supreme.util;
 
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import java.util.Locale;
 import java.util.Map;
 import org.bukkit.NamespacedKey;
-import org.bukkit.Registry;
 import org.bukkit.enchantments.Enchantment;
 
 /** Compatibility for Supreme's older Bukkit enchantment names in config.yml. */
@@ -37,7 +38,8 @@ final class SupremeEnchantmentResolver {
         }
         key = OLD_KEYS.getOrDefault(key, key);
         try {
-            return Registry.ENCHANTMENT.get(NamespacedKey.minecraft(key));
+            return RegistryAccess.registryAccess().getRegistry(RegistryKey.ENCHANTMENT)
+                    .get(NamespacedKey.minecraft(key));
         } catch (IllegalArgumentException invalidKey) {
             return null;
         }
