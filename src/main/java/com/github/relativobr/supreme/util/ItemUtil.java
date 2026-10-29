@@ -8,7 +8,6 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.core.attributes.Radioactivity;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.data.persistent.PersistentDataAPI;
-import org.bukkit.ChatColor;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
@@ -22,7 +21,6 @@ import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -110,39 +108,58 @@ public class ItemUtil {
     public static void addLoreQuarry(@Nonnull AbstractQuarry quarry) {
         ItemStack item = quarry.getItem();
         ItemMeta meta = item.getItemMeta();
-        // lore
-        List<String> lore = new ArrayList<>();
-        lore.add(" ");
-        Optional<List<String>> lastElementLore = Optional.empty();
-        if (meta.hasLore()) {
-            lastElementLore = Optional.of(meta.getLore());
-        }
+        // Historical layout: spacer, generated output chances, optional limiter, then original lore.
+        List<String> generated = new ArrayList<>();
+        generated.add(" ");
         final SupremeQuarryOutput output = quarry.getOutput();
         final List<AbstractQuarryOutputItem> outputItems = output.getOutputItems().stream().filter(Objects::nonNull)
                 .collect(Collectors.toList());
         for (AbstractQuarryOutputItem outputItem : outputItems) {
             if (outputItem != null && outputItem.getItemStack() != null && outputItem.getItemStack().getItemMeta() != null) {
-                String name = outputItem.getItemStack().getType().name();
-                if (outputItem.getItemStack().getItemMeta().hasDisplayName()) {
-                    name = outputItem.getItemStack().getItemMeta().getDisplayName();
-                } else {
-                    name = name.replace("_", " ");
-                    name = name.substring(0, 1).toUpperCase().concat(name.substring(1).toLowerCase());
-                    name = ChatColor.AQUA + name;
-                }
-                lore.add(name + " " + ChatColor.YELLOW + outputItem.getChance() + "%");
+                generated.add(formatQuarryOutputLine(outputItem.getItemStack(), outputItem.getChance()));
             }
         }
 
         if (getSupremeOptions().isLimitProductionQuarry()) {
-            lore.add(" ");
-            lore.add(ChatColor.GOLD + "Limit Production Quarry");
+            generated.add(" ");
+            generated.add(LegacyComponentSerializer.legacySection()
+                    .serialize(Component.text("Limit Production Quarry", NamedTextColor.GOLD)));
         }
 
-        lastElementLore.ifPresent(lore::addAll);
-        meta.setLore(lore);
-        // add meta
+        prependQuarryLore(meta, generated);
         item.setItemMeta(meta);
+    }
+
+    /** Preserve the original legacy-colored chance line without deprecated ItemMeta String accessors. */
+    static String formatQuarryOutputLine(ItemStack output, int chance) {
+        ItemMeta outputMeta = output.getItemMeta();
+        String name = output.getType().name();
+        if (outputMeta.hasDisplayName()) {
+            name = LegacyComponentSerializer.legacySection().serialize(outputMeta.displayName());
+        } else {
+            name = name.replace("_", " ");
+            name = name.substring(0, 1).toUpperCase().concat(name.substring(1).toLowerCase());
+            name = LegacyComponentSerializer.legacySection().serialize(Component.text(name, NamedTextColor.AQUA));
+        }
+        return name + " " + LegacyComponentSerializer.legacySection()
+                .serialize(Component.text(chance + "%", NamedTextColor.YELLOW));
+    }
+
+    /**
+     * The generated quarry header has historically appeared before old item lore.
+     * Preserve pre-existing Adventure components (including events, fonts and data) without
+     * flattening stored items to deprecated String lore or changing the original line order.
+     */
+    static void prependQuarryLore(ItemMeta meta, List<String> generated) {
+        List<Component> original = meta.lore();
+        List<Component> result = new ArrayList<>(generated.size() + (original == null ? 0 : original.size()));
+        for (String line : generated) {
+            result.add(LegacyComponentSerializer.legacySection().deserialize(line));
+        }
+        if (original != null) {
+            result.addAll(original);
+        }
+        meta.lore(result);
     }
 
 
