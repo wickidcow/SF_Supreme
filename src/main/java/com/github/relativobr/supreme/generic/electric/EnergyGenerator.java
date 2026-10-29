@@ -107,12 +107,15 @@ public final class EnergyGenerator extends MenuBlock implements SupremeEnergyPro
 
     BlockMenu menu = BlockStorage.getInventory(location);
     if (menu != null && menu.hasViewer()) {
+      // Preserve the historical int-clamped status text. The persisted balance
+      // and the generator's output/cadence remain completely untouched.
+      int shownCharge = legacyDisplayedCharge(getChargeLong(location));
       if (generation == 0) {
         menu.replaceExistingItem(13, new CustomItemStack(
             Material.RED_STAINED_GLASS_PANE,
             "&cNot generating",
             "&7Type: &6" + type,
-            "&7Stored: &6" + UtilEnergy.format(getCharge(location)) + " J",
+            "&7Stored: &6" + UtilEnergy.format(shownCharge) + " J",
             "&7Capacity: &6" + UtilEnergy.format(buffer) + " J"));
       } else {
         menu.replaceExistingItem(13, new CustomItemStack(
@@ -120,11 +123,20 @@ public final class EnergyGenerator extends MenuBlock implements SupremeEnergyPro
             "&aGeneration",
             "&7Type: &6" + type,
             "&7Generating: &6" + UtilEnergy.format(UtilEnergy.toPerSecond(generation)) + " J/s ",
-            "&7Stored: &6" + UtilEnergy.format(getCharge(location)) + " J",
+            "&7Stored: &6" + UtilEnergy.format(shownCharge) + " J",
             "&7Capacity: &6" + UtilEnergy.format(buffer) + " J"));
       }
     }
     return generation;
+  }
+
+  /**
+   * Mirrors Slimefun Legacy's original getCharge(Location) int clamp for
+   * display text. Do not widen the GUI value or modify any stored charge.
+   * This is intentionally package-private for regression testing only.
+   */
+  static int legacyDisplayedCharge(long charge) {
+    return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, charge));
   }
 
   @Override
