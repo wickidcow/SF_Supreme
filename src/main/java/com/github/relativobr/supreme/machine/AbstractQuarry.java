@@ -35,7 +35,9 @@ import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ChestMenu;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -51,8 +53,10 @@ import org.bukkit.inventory.ItemStack;
 
 public class AbstractQuarry extends SlimefunItem implements EnergyNetComponent {
 
-  private static final DecimalFormat FORMAT = new DecimalFormat("###,###,##0.00",
-      DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+  // DecimalFormat is mutable and not safe to share across independently ticking Folia regions.
+  // Preserve the historical English symbols and numeric pattern for every caller.
+  private static final ThreadLocal<DecimalFormat> FORMAT = ThreadLocal.withInitial(() ->
+      new DecimalFormat("###,###,##0.00", DecimalFormatSymbols.getInstance(Locale.ENGLISH)));
   private static final String OWNER_KEY = "owner";
   private static final String ENABLED_KEY = "supreme_enabled";
   private static final Particle HAPPY_PARTICLE = resolveParticle("HAPPY_VILLAGER",
@@ -73,7 +77,7 @@ public class AbstractQuarry extends SlimefunItem implements EnergyNetComponent {
 
   @Nonnull
   public static String format(double number) {
-    return FORMAT.format(number);
+    return FORMAT.get().format(number);
   }
 
   @Override
@@ -195,11 +199,11 @@ public class AbstractQuarry extends SlimefunItem implements EnergyNetComponent {
 
     if (energyCharge < getEnergyConsumption() || !enabled) {
       menu.addItem(InventoryRecipe.QUARRY_STATUS,
-          new CustomItemStack(Material.OBSIDIAN, ChatColor.RED + "NOT-ACTIVE", powerPerSecond,
+          new CustomItemStack(Material.OBSIDIAN, statusText(false), powerPerSecond,
               powerCharged, infoSpeed));
     } else {
       menu.addItem(InventoryRecipe.QUARRY_STATUS,
-          new CustomItemStack(Material.GLOWSTONE, ChatColor.GREEN + "ACTIVE", powerPerSecond,
+          new CustomItemStack(Material.GLOWSTONE, statusText(true), powerPerSecond,
               powerCharged, infoSpeed));
     }
     menu.addMenuClickHandler(InventoryRecipe.QUARRY_STATUS,
@@ -227,6 +231,13 @@ public class AbstractQuarry extends SlimefunItem implements EnergyNetComponent {
 
     player.playSound(player.getLocation(), Sound.BLOCK_BARREL_OPEN, 1, 1);
     menu.open(player);
+  }
+
+  /** Historical §a/§c GUI status text without the deprecated Bukkit ChatColor formatter. */
+  static String statusText(boolean active) {
+    return LegacyComponentSerializer.legacySection().serialize(
+        Component.text(active ? "ACTIVE" : "NOT-ACTIVE",
+            active ? NamedTextColor.GREEN : NamedTextColor.RED));
   }
 
   protected boolean isInvalidInventory(@Nonnull Block block) {
