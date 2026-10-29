@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout Supreme
         uses: actions/checkout@v5
+      - name: Verify distinct Supreme 1.0.21 candidate version contract
+        run: python3 -m unittest discover -s scripts -p 'test_release_candidate_identity.py' -v
       - name: Verify Supreme safety invariants
         shell: bash
         run: bash scripts/verify-supreme-invariants.sh .
