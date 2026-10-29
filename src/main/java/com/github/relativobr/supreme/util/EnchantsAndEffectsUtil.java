@@ -4,7 +4,7 @@ import com.github.relativobr.supreme.Supreme;
 import com.github.relativobr.supreme.gear.SupremeSoulboundGear;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -37,7 +37,7 @@ public class EnchantsAndEffectsUtil {
             List<String> lore = new ArrayList<>();
 
             // Slimefun's lore fallback recognizes the canonical gray marker, not an aqua label.
-            lore.add(ChatColor.GRAY + "Soulbound");
+            lore.add(GearLore.coloredLegacyText("Soulbound", NamedTextColor.GRAY));
             SupremeSoulboundGear.markTemplate(meta, Slimefun.getRegistry().getSoulboundDataKey());
 
             // find path
@@ -82,7 +82,7 @@ public class EnchantsAndEffectsUtil {
             List<String> lore = new ArrayList<>();
 
             // Slimefun's lore fallback recognizes the canonical gray marker, not an aqua label.
-            lore.add(ChatColor.GRAY + "Soulbound");
+            lore.add(GearLore.coloredLegacyText("Soulbound", NamedTextColor.GRAY));
             SupremeSoulboundGear.markTemplate(meta, Slimefun.getRegistry().getSoulboundDataKey());
 
             // find path
@@ -178,7 +178,7 @@ public class EnchantsAndEffectsUtil {
         String level = buildLoreAmplifier(getAmplifier(settings, itemPath));
         List<String> lore = new ArrayList<>();
         for (String effectName : getNamesEffects(getEffectSection(settings, itemPath))) {
-            lore.add(ChatColor.DARK_PURPLE + effectName + level);
+            lore.add(GearLore.coloredLegacyText(effectName + level, NamedTextColor.DARK_PURPLE));
         }
         return lore;
     }
