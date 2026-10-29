@@ -11,6 +11,7 @@ import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import java.lang.reflect.Method;
 import java.util.stream.Stream;
 import org.bukkit.Location;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -35,6 +36,16 @@ class EnergyGeneratorDisplayedChargeTest {
         int oldDisplayedBalance = component.getCharge(location);
         assertEquals(oldDisplayedBalance, EnergyGenerator.readDisplayedCharge(component, location));
         longReader.invoke(verify(component, times(2)), location);
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    void olderGuguChargeMethodRemainsTheIntDisplayFallback() {
+        Location location = new Location(null, 0, 64, 0);
+        EnergyNetComponent component = mock(EnergyNetComponent.class);
+        doReturn(-39).when(component).getCharge(location);
+        assertEquals(-39, EnergyGenerator.readDisplayedCharge(component, location, null));
+        verify(component).getCharge(location);
     }
 
     private static Stream<Long> balances() {

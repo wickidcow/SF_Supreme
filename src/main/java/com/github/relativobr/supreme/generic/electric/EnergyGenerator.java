@@ -5,9 +5,9 @@ import com.github.relativobr.supreme.compat.SupremeEnergyProvider;
 import com.github.relativobr.supreme.libs.guizhanlib.slimefun.machines.MenuBlock;
 import com.github.relativobr.supreme.util.UtilEnergy;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
-import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
+import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.blocks.BlockPosition;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
@@ -136,11 +136,6 @@ public final class EnergyGenerator extends MenuBlock implements SupremeEnergyPro
   }
 
   /**
-   * Mirrors Slimefun Legacy's original getCharge(Location) int clamp for
-   * display text. Do not widen the GUI value or modify any stored charge.
-   * This is intentionally package-private for regression testing only.
-   */
-  /**
    * Newer Legacy/United cores expose a long-valued charge reader; older Gugu
    * releases do not. Resolve this optional descriptor once rather than linking
    * to a method absent from an otherwise supported API at load time.
@@ -159,7 +154,12 @@ public final class EnergyGenerator extends MenuBlock implements SupremeEnergyPro
    * legacy signed-int display limit, irrespective of the Slimefun fork.
    */
   static int readDisplayedCharge(EnergyNetComponent component, Location location) {
-    Method reader = LONG_CHARGE_ACCESSOR;
+    return readDisplayedCharge(component, location, LONG_CHARGE_ACCESSOR);
+  }
+
+  // The injected reader permits a direct regression test of the historical
+  // Gugu fallback without changing the actual runtime lookup policy.
+  static int readDisplayedCharge(EnergyNetComponent component, Location location, Method reader) {
     if (reader == null) {
       return legacyIntCharge(component, location);
     }
@@ -177,6 +177,10 @@ public final class EnergyGenerator extends MenuBlock implements SupremeEnergyPro
     return component.getCharge(location);
   }
 
+  /**
+   * Mirrors Slimefun Legacy's original getCharge(Location) signed-int clamp
+   * for display only. Never modify the underlying energy balance.
+   */
   static int legacyDisplayedCharge(long charge) {
     return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, charge));
   }
