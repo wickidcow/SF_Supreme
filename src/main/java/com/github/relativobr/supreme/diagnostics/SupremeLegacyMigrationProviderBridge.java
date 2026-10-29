@@ -7,7 +7,6 @@ import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
-import org.bukkit.plugin.ServicePriority;
 
 /** Optional reflective bridge for loaded Supreme ItemStack legacy-ID migration. */
 public final class SupremeLegacyMigrationProviderBridge {
@@ -46,9 +45,8 @@ public final class SupremeLegacyMigrationProviderBridge {
       Object provider = Proxy.newProxyInstance(providerClass.getClassLoader(), new Class<?>[]{providerClass},
           (proxy, method, arguments) -> invokeProvider(plugin, reportConstructor, proxy, method, arguments));
 
-      @SuppressWarnings({"unchecked", "rawtypes"})
-      Class rawProviderClass = providerClass;
-      plugin.getServer().getServicesManager().register(rawProviderClass, provider, plugin, ServicePriority.Normal);
+      LegacyProviderRegistration.register(
+          plugin.getServer().getServicesManager(), providerClass, provider, plugin);
       registered = true;
       plugin.log(Level.INFO, "Registered Supreme legacy ItemStack migration with Slimefun Doctor.");
     } catch (ClassNotFoundException ignored) {
