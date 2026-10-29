@@ -113,7 +113,7 @@ class SupremeArmorEffectsTest {
                 String level = amplifier == 0 ? " I" : amplifier == 1 ? " II" : " III";
                 for (PotionEffect bonus : bonuses) {
                     String expected = SupremePotionEffects.displayName(bonus.getType()) + level;
-                    assertTrue(lore.stream().anyMatch(x -> x.endsWith(expected)),
+                    assertTrue(lore.contains("\u00a75" + expected),
                             "Missing tooltip '" + expected + "' for " + path);
                 }
                 assertNotNull(config.getConfigurationSection("supreme-enchant." + path),
