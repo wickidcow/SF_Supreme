@@ -61,6 +61,7 @@ jobs:
           required = {
               'com.github.relativobr.supreme.SupremeLocalizationActionBarTest': 2,
               'com.github.relativobr.supreme.command.SupremeCommandTextTest': 10,
+              'com.github.relativobr.supreme.generic.electric.EnergyGeneratorDisplayedChargeTest': 10,
           }
           for name, minimum in required.items():
               report = Path(f'target/surefire-reports/TEST-{name}.xml')
@@ -75,7 +76,14 @@ jobs:
               majors = {struct.unpack('>H', jar.read(n)[6:8])[0] for n in classes}
               if 65 not in majors or any(m > 65 for m in majors):
                   raise SystemExit('Java 21 compatibility target was not preserved')
-          print('Presentation tests executed; Java 21 target and packaging verified.')
+          warnings = Path('candidate-build.log').read_text(encoding='utf-8').splitlines()
+          stale_reads = [line for line in warnings
+              if 'EnergyGenerator.java:' in line
+              and 'getCharge(org.bukkit.Location)' in line
+              and 'deprecated' in line]
+          if stale_reads:
+              raise SystemExit('Deprecated generator GUI reads returned:\n' + '\n'.join(stale_reads))
+          print('Presentation and charge parity tests executed; no deprecated generator GUI reads; Java 21 target and packaging verified.')
           PY
       - name: Retain exact-source test and compiler evidence
         if: always()
