@@ -32,7 +32,7 @@ public class MobCollectorMachineRecipe extends MachineRecipe implements Predicat
 
     SupremeOptions supremeOptions = getSupremeOptions();
 
-    List<ItemStack> displayRecipes = new ArrayList();
+    List<ItemStack> displayRecipes = new ArrayList<>();
     displayRecipes.add(new CustomItemStack(Material.GLASS_BOTTLE, null, "&fRequires &bBee &fnearby"));
     displayRecipes.add(new ItemStack(Material.HONEY_BOTTLE));
     displayRecipes.add(new CustomItemStack(Material.GLASS_BOTTLE, null, "&fRequires &bSquid &fnearby"));
