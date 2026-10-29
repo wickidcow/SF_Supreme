@@ -15,8 +15,8 @@ VERSION = "1.0.21"
 MAIN = "com/github/relativobr/supreme/Supreme.class"
 
 
-def java_class(major=65):
-    return b"\xca\xfe\xba\xbe" + b"\x00\x00" + major.to_bytes(2, "big") + b"\x00\x01"
+def java_class(major=65, minor=0):
+    return b"\xca\xfe\xba\xbe" + minor.to_bytes(2, "big") + major.to_bytes(2, "big") + b"\x00\x01"
 
 
 class SupremeDistributionContractTest(unittest.TestCase):
@@ -52,6 +52,40 @@ class SupremeDistributionContractTest(unittest.TestCase):
         self.assertEqual(1, result["classes"])
         self.assertEqual(65, result["max_major"])
         self.assertEqual(64, len(result["sha256"]))
+
+    def test_java21_preview_class_is_refused(self):
+        self.class_data = java_class(65, 65535)
+        self.rejects()
+
+    def test_earlier_java_preview_classes_are_refused(self):
+        for major in (56, 61, 64):
+            with self.subTest(major=major):
+                self.class_data = java_class(major, 65535)
+                self.rejects()
+
+    def test_nonzero_modern_minor_is_refused(self):
+        for major, minor in ((56, 1), (61, 42), (65, 65534)):
+            with self.subTest(major=major, minor=minor):
+                self.class_data = java_class(major, minor)
+                self.rejects()
+
+    def test_preview_hidden_in_another_class_is_refused(self):
+        self.extras = {"com/github/relativobr/supreme/Preview.class": java_class(65, 65535)}
+        self.rejects()
+
+    def test_stable_java21_with_older_class_still_passes(self):
+        self.extras = {"com/github/relativobr/supreme/Older.class": java_class(52)}
+        self.prepare()
+        result = check_jar(self.jar, VERSION)
+        self.assertEqual(2, result["classes"])
+        self.assertEqual(65, result["max_major"])
+
+    def test_historical_pre_preview_minors_remain_accepted(self):
+        for major, minor in ((45, 3), (52, 1), (55, 65535)):
+            with self.subTest(major=major, minor=minor):
+                self.class_data = java_class(major, minor)
+                self.prepare()
+                self.assertEqual(1, check_jar(self.jar, VERSION)["classes"])
 
     def test_java25_class_is_refused(self):
         self.class_data = java_class(69)
