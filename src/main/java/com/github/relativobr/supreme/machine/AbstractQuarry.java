@@ -51,8 +51,10 @@ import org.bukkit.inventory.ItemStack;
 
 public class AbstractQuarry extends SlimefunItem implements EnergyNetComponent {
 
-  private static final DecimalFormat FORMAT = new DecimalFormat("###,###,##0.00",
-      DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+  // DecimalFormat is mutable and not safe to share across independently ticking Folia regions.
+  // Preserve the historical English symbols and numeric pattern for every caller.
+  private static final ThreadLocal<DecimalFormat> FORMAT = ThreadLocal.withInitial(() ->
+      new DecimalFormat("###,###,##0.00", DecimalFormatSymbols.getInstance(Locale.ENGLISH)));
   private static final String OWNER_KEY = "owner";
   private static final String ENABLED_KEY = "supreme_enabled";
   private static final Particle HAPPY_PARTICLE = resolveParticle("HAPPY_VILLAGER",
@@ -73,7 +75,7 @@ public class AbstractQuarry extends SlimefunItem implements EnergyNetComponent {
 
   @Nonnull
   public static String format(double number) {
-    return FORMAT.format(number);
+    return FORMAT.get().format(number);
   }
 
   @Override
