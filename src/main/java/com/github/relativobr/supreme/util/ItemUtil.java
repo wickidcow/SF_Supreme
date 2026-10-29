@@ -228,35 +228,42 @@ public class ItemUtil {
         return radioactivity.getLore();
     }
 
+    /**
+     * Keep generated mob-tech lore as legacy section-formatted Strings. Existing saved items,
+     * SlimefunItemStack constructors and the public buildLoreType descriptor depend on these
+     * exact section-code sequences, including repeated color codes between fragments.
+     */
     public static String buildLoreType(MobTechGeneric.MobTechType mobTechType, Integer tier) {
         String tierString = String.valueOf(tier + 1);
         switch (mobTechType) {
             case MUTATION_BERSERK:
             case ROBOTIC_ACCELERATION:
-                return ChatColor.GREEN + tierString + "x " + ChatColor.GRAY + "increase speed " +
-                        ChatColor.RED + tierString + "0%" + ChatColor.GRAY + " increase energy";
+                return legacyColoredText(tierString + "x ", NamedTextColor.GREEN)
+                        + legacyColoredText("increase speed ", NamedTextColor.GRAY)
+                        + legacyColoredText(tierString + "0%", NamedTextColor.RED)
+                        + legacyColoredText(" increase energy", NamedTextColor.GRAY);
             case MUTATION_LUCK:
             case ROBOTIC_CLONING:
                 return buildLoreTypeLuckAndCloning(tier);
             case MUTATION_INTELLIGENCE:
             case ROBOTIC_EFFICIENCY:
-                return ChatColor.GREEN + tierString + "0% " + ChatColor.GRAY + " decrease energy";
+                return legacyColoredText(tierString + "0% ", NamedTextColor.GREEN)
+                        + legacyColoredText(" decrease energy", NamedTextColor.GRAY);
             case SIMPLE:
             default:
-                return ChatColor.GRAY + "Increases processing speed";
+                return legacyColoredText("Increases processing speed", NamedTextColor.GRAY);
         }
     }
 
     private static String buildLoreTypeLuckAndCloning(Integer tier) {
-        if (tier >= 9) {
-            return ChatColor.GREEN + "+4 stack" + ChatColor.GRAY + " clone";
-        } else if (tier >= 6) {
-            return ChatColor.GREEN + "+3 stack" + ChatColor.GRAY + " clone";
-        } else if (tier >= 4) {
-            return ChatColor.GREEN + "+2 stack" + ChatColor.GRAY + " clone";
-        } else {
-            return ChatColor.GREEN + "+1 stack" + ChatColor.GRAY + " clone";
-        }
+        int bonus = tier >= 9 ? 4 : tier >= 6 ? 3 : tier >= 4 ? 2 : 1;
+        return legacyColoredText("+" + bonus + " stack", NamedTextColor.GREEN)
+                + legacyColoredText(" clone", NamedTextColor.GRAY);
+    }
+
+    /** Serialize each historical color fragment individually, preserving its explicit prefix. */
+    private static String legacyColoredText(String text, NamedTextColor color) {
+        return LegacyComponentSerializer.legacySection().serialize(Component.text(text, color));
     }
 
     private static String buildLoreTypeAmount(MobTechGeneric.MobTechType mobTechType, Integer tier) {
@@ -266,16 +273,18 @@ public class ItemUtil {
             case ROBOTIC_ACCELERATION:
             case MUTATION_INTELLIGENCE:
             case ROBOTIC_EFFICIENCY:
-                return ChatColor.GRAY + "Value process " + ChatColor.YELLOW
-                        + "(" + tierString + " * amount stack * 0.15625)";
+                return legacyColoredText("Value process ", NamedTextColor.GRAY)
+                        + legacyColoredText("(" + tierString + " * amount stack * 0.15625)",
+                                NamedTextColor.YELLOW);
             case MUTATION_LUCK:
             case ROBOTIC_CLONING:
-                return ChatColor.GRAY + "Value process " + ChatColor.YELLOW
-                        + "(" + Supreme.getSupremeOptions().getMaxAmountTechGenerator() + "x per stack)";
+                return legacyColoredText("Value process ", NamedTextColor.GRAY)
+                        + legacyColoredText("(" + Supreme.getSupremeOptions().getMaxAmountTechGenerator()
+                                + "x per stack)", NamedTextColor.YELLOW);
             case SIMPLE:
             default:
-                return ChatColor.GRAY + "Value process " + ChatColor.YELLOW
-                        + "(amount stack * 0.15625)";
+                return legacyColoredText("Value process ", NamedTextColor.GRAY)
+                        + legacyColoredText("(amount stack * 0.15625)", NamedTextColor.YELLOW);
         }
     }
 
