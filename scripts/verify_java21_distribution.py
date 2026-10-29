@@ -48,9 +48,15 @@ def check_jar(path: Path, version: str) -> dict:
             data = jar.read(name)
             if len(data) < 8 or data[:4] != b"\xca\xfe\xba\xbe":
                 raise ValueError(f"Invalid Java class header: {name}")
-            major = struct.unpack_from(">H", data, 6)[0]
+            minor, major = struct.unpack_from(">HH", data, 4)
             if major < 45 or major > 65:
                 raise ValueError(f"Non-Java-21 bytecode (major {major}) in {name}")
+            # JVMS 4.1: modern class files use minor 0 for stable bytecode.
+            # Minor 65535 requires release-specific --enable-preview;
+            # other nonzero minors are invalid for major 56 and higher.
+            if major >= 56 and minor != 0:
+                kind = "preview" if minor == 65535 else "invalid minor version"
+                raise ValueError(f"Non-distributable {kind} ({major}.{minor}) in {name}")
             count += 1
             ceiling = max(ceiling, major)
         if not count:
