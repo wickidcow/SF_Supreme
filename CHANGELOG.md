@@ -1,5 +1,13 @@
 # Changelog
 
+## Supreme Legacy 1.0.21 — unreleased validation candidate
+
+- Prepare a **distinct** Java 21 version identity for reviewed Soulbound equipment compatibility, armor-effect/enchantment parity, build modernization and compiler-confirmed deprecation/unchecked cleanup already present on current main. New artifacts must not masquerade as the published `v1.0.20` JAR.
+- This candidate changes build/JAR metadata and regression policy only; it does **not** modify production Java, saved lore/item/research/world/storage identifiers, recipes, item quantities, machine rates, energy costs, or recovery behavior.
+- Prior 286 JUnit tests on main and compiler compatibility lanes are historical receipts, **not** testing of this version candidate. Exact 1.21.11, 26.2, stable 26.3, supported-core compatibility and real native storage/soulbound/armor recovery evidence must be revalidated against the release source before a tag or publication.
+- Preserve published `v1.0.20` and its `SF_Supreme1.0.20.jar` bytes permanently. No release is authorized by preparing this candidate.
+
+
 ## Unreleased — Supreme armor effects and enchant compatibility
 
 - Resolve old Supreme potion configuration keys to modern registry effects, including Resistance, Strength and Haste; validate every configured potion key and ensure tooltip text matches the applied effect.
