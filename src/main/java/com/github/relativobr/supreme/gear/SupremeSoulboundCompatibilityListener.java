@@ -55,6 +55,11 @@ public final class SupremeSoulboundCompatibilityListener implements Listener {
 
     /** Read-only diagnostic: returns whether this is an unmigrated historical ID. */
     public boolean isHistoricalGear(ItemStack stack) {
+        // Inventory and Doctor probes may supply an empty slot. Match the guard
+        // already used by recognizesSupremeGear before calling Slimefun's data service.
+        if (stack == null || stack.getType().isAir()) {
+            return false;
+        }
         String id = storedId(stack);
         return id != null && SlimefunItem.getById(id) == null && historicalGear.containsKey(id);
     }
