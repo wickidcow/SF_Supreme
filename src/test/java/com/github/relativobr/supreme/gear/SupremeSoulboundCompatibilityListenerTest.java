@@ -6,7 +6,10 @@ import static org.mockito.Mockito.mock;
 
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockbukkit.mockbukkit.MockBukkit;
 
 /**
  * Diagnostic queries must tolerate empty inventory slots without consulting
@@ -15,6 +18,17 @@ import org.junit.jupiter.api.Test;
 class SupremeSoulboundCompatibilityListenerTest {
     private final SupremeSoulboundCompatibilityListener listener =
             mock(SupremeSoulboundCompatibilityListener.class, CALLS_REAL_METHODS);
+
+    @BeforeEach
+    void setUp() {
+        // ItemStack(Material.AIR) still consults Bukkit's UnsafeValues during construction.
+        MockBukkit.mock();
+    }
+
+    @AfterEach
+    void tearDown() {
+        MockBukkit.unmock();
+    }
 
     @Test
     void nullSlotIsNotHistoricalRegisteredOrSoulbound() {
