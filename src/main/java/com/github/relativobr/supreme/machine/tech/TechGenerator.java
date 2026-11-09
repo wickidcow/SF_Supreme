@@ -99,7 +99,9 @@ public class TechGenerator extends SimpleItemContainerMachine implements Radioac
   }
 
   public static synchronized void addRecipesToProcess(ItemStack input, ItemStack output) {
-    receitasParaProduzir.add(new AbstractItemRecipe(input, output));
+    // Snapshot the registered recipe identity. A shared SlimefunItems template must never
+    // become mutable machine state through this registry.
+    receitasParaProduzir.add(new AbstractItemRecipe(input.clone(), output.clone()));
     invalidateRecipeCaches();
   }
 
@@ -590,7 +592,7 @@ public class TechGenerator extends SimpleItemContainerMachine implements Radioac
     for (AbstractItemRecipe produce : cachedRecipesForProcessing()) {
       if (SlimefunUtils.isItemSimilar(currentInput, produce.getFirstItemInput(), false, true)) {
         ItemStack output = produce.getFirstItemOutput();
-        recipeMatches.put(block, new RecipeMatch(produce.getFirstItemInput(), output));
+        recipeMatches.put(block, new RecipeMatch(produce.getFirstItemInput().clone(), output.clone()));
         return output;
       }
     }
