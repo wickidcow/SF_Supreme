@@ -111,4 +111,31 @@ class SupremeInventoryOutputIdentityTest {
     assertEquals(7, second.getAmount());
   }
 
+  @Test
+  void capacityCheckDoesNotTreatDifferentlyFormattedCarbonadoAsTheSameStack() {
+    MockBukkit.mock();
+    ItemStack existing = new ItemStack(Material.DIAMOND, 64);
+    ItemMeta oldMeta = existing.getItemMeta();
+    oldMeta.displayName(Component.text("Carbonado", NamedTextColor.AQUA));
+    existing.setItemMeta(oldMeta);
+
+    ItemStack generated = new ItemStack(Material.DIAMOND, 1);
+    ItemMeta generatedMeta = generated.getItemMeta();
+    generatedMeta.displayName(Component.text("").append(
+        Component.text("Carbonado", NamedTextColor.AQUA).decoration(
+            net.kyori.adventure.text.format.TextDecoration.BOLD, false)));
+    generated.setItemMeta(generatedMeta);
+
+    BlockMenu menu = mock(BlockMenu.class);
+    when(menu.getItemInSlot(19)).thenReturn(existing);
+    when(menu.getItemInSlot(20)).thenReturn(null);
+
+    assertFalse(existing.isSimilar(generated),
+        "the historical and generated Adventure components must remain distinct");
+    assertTrue(SupremeInventoryUtils.canFit(menu, new int[]{19, 20}, generated),
+        "a separate empty output slot must accept a nonmatching stack");
+    assertFalse(SupremeInventoryUtils.canFit(menu, new int[]{19}, generated),
+        "a full nonmatching stack must not be treated as available capacity");
+  }
+
 }
