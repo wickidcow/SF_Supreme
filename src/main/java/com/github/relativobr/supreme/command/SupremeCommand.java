@@ -5,6 +5,7 @@ import com.github.relativobr.supreme.gear.AbstractArmor;
 import com.github.relativobr.supreme.generic.machine.GenericMachine;
 import com.github.relativobr.supreme.generic.machine.SupremeMachineDiagnostics;
 import com.github.relativobr.supreme.util.SupremeRecipeDoctor;
+import com.github.relativobr.supreme.util.SupremeItemIdentityDoctor;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.attributes.ProtectionType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
@@ -61,6 +62,8 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
           + DARK_GRAY + " - inspect Supreme gear held in your main hand");
       send(sender, GRAY + "/" + label + " doctor armor"
           + DARK_GRAY + " - inspect worn Supreme armor effects and protection");
+      send(sender, GRAY + "/" + label + " doctor items"
+          + DARK_GRAY + " - compare main-hand output with an off-hand crafted item");
       return true;
     }
 
@@ -82,6 +85,10 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
         runArmorDoctor(sender);
         return true;
       }
+      if (args[1].equalsIgnoreCase("items")) {
+        runItemIdentityDoctor(sender);
+        return true;
+      }
       if (args[1].equalsIgnoreCase("machine")) {
         runMachineDoctor(sender, false);
         return true;
@@ -92,7 +99,7 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       }
     }
 
-    send(sender, RED + "Usage: /" + label + " doctor <recipes|machine|retry|soulbound|armor>");
+    send(sender, RED + "Usage: /" + label + " doctor <recipes|machine|retry|soulbound|armor|items>");
     return true;
   }
 
@@ -104,6 +111,18 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
   // MiniMessage tags, item lore or persisted records while modernizing the transport.
   static Component commandMessage(String message) {
     return COMMAND_TEXT.deserialize(message);
+  }
+
+  private void runItemIdentityDoctor(CommandSender sender) {
+    if (!(sender instanceof Player player)) {
+      send(sender, RED + "Hold a generator item in your main hand and a crafted/cheat item in your off hand.");
+      return;
+    }
+    send(sender, AQUA + "Supreme Item Identity Doctor (read-only)");
+    for (String line : SupremeItemIdentityDoctor.compare(
+        player.getInventory().getItemInMainHand(), player.getInventory().getItemInOffHand())) {
+      send(sender, GRAY + line);
+    }
   }
 
   private void runArmorDoctor(CommandSender sender) {
@@ -305,6 +324,7 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       addIfMatches(options, "retry", args[1]);
       addIfMatches(options, "soulbound", args[1]);
       addIfMatches(options, "armor", args[1]);
+      addIfMatches(options, "items", args[1]);
     }
     return options;
   }
