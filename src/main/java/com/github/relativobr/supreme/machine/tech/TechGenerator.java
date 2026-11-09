@@ -10,6 +10,7 @@ import com.github.relativobr.supreme.resource.SupremeComponents;
 import com.github.relativobr.supreme.resource.mobtech.MobTech;
 import com.github.relativobr.supreme.util.ItemGroups;
 import com.github.relativobr.supreme.util.SupremeInventoryUtils;
+import com.github.relativobr.supreme.util.TechGeneratorRecipeOutput;
 import com.github.relativobr.supreme.util.SupremeItemStack;
 import com.github.relativobr.supreme.util.UtilEnergy;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -591,7 +592,12 @@ public class TechGenerator extends SimpleItemContainerMachine implements Radioac
 
     for (AbstractItemRecipe produce : cachedRecipesForProcessing()) {
       if (SlimefunUtils.isItemSimilar(currentInput, produce.getFirstItemInput(), false, true)) {
-        ItemStack output = produce.getFirstItemOutput();
+        // Crafting and /sf cheat use the registered item, not the early card-setup snapshot.
+        // Resolve only real SlimefunItemStack recipe outputs; custom/vanilla stacks stay intact.
+        ItemStack output = TechGeneratorRecipeOutput.resolve(produce.getFirstItemOutput(), id -> {
+          SlimefunItem registered = SlimefunItem.getById(id);
+          return registered == null ? null : registered.getRecipeOutput();
+        });
         recipeMatches.put(block, new RecipeMatch(produce.getFirstItemInput().clone(), output.clone()));
         return output;
       }
