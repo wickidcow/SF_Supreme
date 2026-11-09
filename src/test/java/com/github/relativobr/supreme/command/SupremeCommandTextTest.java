@@ -43,7 +43,8 @@ class SupremeCommandTextTest {
         "\u00a77/supreme doctor machine\u00a78 - inspect the Supreme machine you are looking at",
         "\u00a77/supreme doctor retry\u00a78 - re-read a blocked machine checkpoint after repair",
         "\u00a77/supreme doctor soulbound\u00a78 - inspect Supreme gear held in your main hand",
-        "\u00a77/supreme doctor armor\u00a78 - inspect worn Supreme armor effects and protection");
+        "\u00a77/supreme doctor armor\u00a78 - inspect worn Supreme armor effects and protection",
+        "\u00a77/supreme doctor items\u00a78 - compare main-hand output with an off-hand crafted item");
   }
 
   @Test
@@ -57,7 +58,7 @@ class SupremeCommandTextTest {
   @Test
   void usagePreservesActualAliasAndLiteralAmpersands() {
     assertTrue(executor.onCommand(sender, command, "s&c", new String[] {"unknown"}));
-    assertMessages("\u00a7cUsage: /s&c doctor <recipes|machine|retry|soulbound|armor>");
+    assertMessages("\u00a7cUsage: /s&c doctor <recipes|machine|retry|soulbound|armor|items>");
     verifyNoInteractions(plugin);
   }
 
@@ -74,6 +75,14 @@ class SupremeCommandTextTest {
     when(sender.hasPermission("supreme.admin")).thenReturn(true);
     assertTrue(executor.onCommand(sender, command, "supreme", new String[] {"doctor", "soulbound"}));
     assertMessages("\u00a7cHold Supreme gear in your main hand to inspect its soulbound status.");
+    verifyNoInteractions(plugin);
+  }
+
+  @Test
+  void consoleItemDoctorGuardDoesNotReadPlayerInventory() {
+    when(sender.hasPermission("supreme.admin")).thenReturn(true);
+    assertTrue(executor.onCommand(sender, command, "supreme", new String[] {"doctor", "items"}));
+    assertMessages("\u00a7cHold a generator item in your main hand and a crafted/cheat item in your off hand.");
     verifyNoInteractions(plugin);
   }
 
