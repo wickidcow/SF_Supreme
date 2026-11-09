@@ -83,17 +83,19 @@ public final class SupremeItemIdentityDoctor {
 
   private static void findDifferences(Map<?, ?> left, Map<?, ?> right, String path,
       List<String> changed) {
-    Set<String> keys = new TreeSet<>();
-    left.keySet().forEach(key -> keys.add(String.valueOf(key)));
-    right.keySet().forEach(key -> keys.add(String.valueOf(key)));
-    for (String key : keys) {
+    List<Object> keys = new ArrayList<>(left.keySet());
+    right.keySet().stream().filter(key -> !left.containsKey(key)).forEach(keys::add);
+    keys.sort(java.util.Comparator.comparing(String::valueOf));
+    for (Object key : keys) {
       if (changed.size() >= MAX_DIFFERENCES) {
         return;
       }
       Object a = left.get(key);
       Object b = right.get(key);
       String child = path + "." + key;
-      if (a instanceof Map<?, ?> leftMap && b instanceof Map<?, ?> rightMap) {
+      if (!left.containsKey(key) || !right.containsKey(key)) {
+        changed.add(child);
+      } else if (a instanceof Map<?, ?> leftMap && b instanceof Map<?, ?> rightMap) {
         findDifferences(leftMap, rightMap, child, changed);
       } else if (!Objects.deepEquals(a, b)) {
         changed.add(child);
