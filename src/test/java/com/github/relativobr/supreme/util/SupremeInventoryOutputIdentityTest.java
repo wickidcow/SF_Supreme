@@ -170,4 +170,38 @@ class SupremeInventoryOutputIdentityTest {
         "matching Slimefun IDs do not override different Adventure item names");
   }
 
+  @Test
+  void pushAllRetainsCanonicalBoldCarbonadoAndItalicLore() {
+    MockBukkit.mock();
+    ItemStack canonical = new ItemStack(Material.DIAMOND, 8);
+    ItemMeta meta = canonical.getItemMeta();
+    Component name = Component.text("Carbonado", NamedTextColor.AQUA)
+        .decoration(net.kyori.adventure.text.format.TextDecoration.BOLD, true)
+        .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false);
+    Component lore = Component.text("Black Diamond", NamedTextColor.GRAY)
+        .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, true);
+    meta.displayName(name);
+    meta.lore(java.util.List.of(Component.empty(), lore));
+    NamespacedKey id = new NamespacedKey("slimefun", "slimefun_item");
+    meta.getPersistentDataContainer().set(id, PersistentDataType.STRING, "CARBONADO");
+    canonical.setItemMeta(meta);
+    ItemStack snapshot = canonical.clone();
+
+    BlockMenu menu = mock(BlockMenu.class);
+    when(menu.pushItem(any(ItemStack.class), any(int[].class))).thenReturn(null);
+    SupremeInventoryUtils.pushAll(menu, new int[]{19, 20}, canonical);
+
+    var captured = org.mockito.ArgumentCaptor.forClass(ItemStack.class);
+    verify(menu).pushItem(captured.capture(), any(int[].class));
+    ItemStack produced = captured.getValue();
+    assertEquals(snapshot, canonical);
+    assertTrue(snapshot.isSimilar(produced),
+        "generator output must remain stackable with the registered canonical recipe item");
+    assertEquals(name, produced.getItemMeta().displayName());
+    assertEquals(java.util.List.of(Component.empty(), lore), produced.getItemMeta().lore());
+    assertEquals("CARBONADO", produced.getItemMeta().getPersistentDataContainer()
+        .get(id, PersistentDataType.STRING));
+    assertEquals(8, produced.getAmount());
+  }
+
 }
