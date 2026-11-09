@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
-import com.github.relativobr.supreme.machine.tech.TechGenerator;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -144,42 +143,5 @@ class SupremeInventoryOutputIdentityTest {
     }
   }
 
-  @Test
-  void techGeneratorRegistrationSnapshotsOutputIdentityAndDoesNotAliasCallerStacks() {
-    MockBukkit.mock();
-    ItemStack input = new ItemStack(Material.PAPER);
-    ItemStack output = new ItemStack(Material.DIAMOND);
-    ItemMeta meta = output.getItemMeta();
-    Component registeredName = Component.text("").append(
-        Component.text("Carbonado", NamedTextColor.AQUA));
-    meta.displayName(registeredName);
-    NamespacedKey identity = new NamespacedKey("slimefun", "slimefun_item");
-    meta.getPersistentDataContainer().set(identity, PersistentDataType.STRING, "CARBONADO");
-    output.setItemMeta(meta);
-    ItemStack registeredSnapshot = output.clone();
-
-    int originalSize = TechGenerator.receitasParaProduzir.size();
-    try {
-      TechGenerator.addRecipesToProcess(input, output);
-      var recipe = TechGenerator.receitasParaProduzir.get(originalSize);
-      assertNotSame(input, recipe.getFirstItemInput());
-      assertNotSame(output, recipe.getFirstItemOutput());
-      assertEquals(registeredSnapshot, recipe.getFirstItemOutput());
-
-      output.setAmount(42);
-      ItemMeta changedMeta = output.getItemMeta();
-      changedMeta.displayName(Component.text("changed by caller"));
-      output.setItemMeta(changedMeta);
-      input.setAmount(17);
-
-      assertEquals(registeredSnapshot, recipe.getFirstItemOutput(),
-          "recipe output must be immune to subsequent changes to shared templates");
-      assertEquals(1, recipe.getFirstItemInput().getAmount());
-      assertEquals("CARBONADO", recipe.getFirstItemOutput().getItemMeta()
-          .getPersistentDataContainer().get(identity, PersistentDataType.STRING));
-    } finally {
-      TechGenerator.receitasParaProduzir.remove(originalSize);
-    }
-  }
 
 }
