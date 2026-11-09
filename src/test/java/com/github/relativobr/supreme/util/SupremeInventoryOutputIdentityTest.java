@@ -54,7 +54,9 @@ class SupremeInventoryOutputIdentityTest {
     SupremeInventoryUtils.pushAll(menu, new int[]{19, 20}, source);
 
     var captured = org.mockito.ArgumentCaptor.forClass(ItemStack.class);
-    verify(menu).pushItem(captured.capture(), aryEq(new int[]{19, 20}));
+    var slots = org.mockito.ArgumentCaptor.forClass(int[].class);
+    verify(menu).pushItem(captured.capture(), slots.capture());
+    assertArrayEquals(new int[]{19, 20}, slots.getValue());
     ItemStack inserted = captured.getValue();
     assertNotSame(source, inserted);
     assertEquals(before, source, "production must not mutate the recipe source");
