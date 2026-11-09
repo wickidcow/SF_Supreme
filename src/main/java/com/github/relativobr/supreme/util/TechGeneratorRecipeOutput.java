@@ -3,7 +3,6 @@ package com.github.relativobr.supreme.util;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import java.util.function.Function;
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import org.bukkit.inventory.ItemStack;
 
 /**
@@ -24,7 +23,7 @@ public final class TechGeneratorRecipeOutput {
 
   @Nonnull
   public static ItemStack resolve(@Nonnull ItemStack declaredOutput,
-      @Nonnull Function<String, @Nullable ItemStack> registeredCraftingOutput) {
+      @Nonnull Function<String, ItemStack> registeredCraftingOutput) {
     if (declaredOutput instanceof SlimefunItemStack template) {
       ItemStack registered = registeredCraftingOutput.apply(template.getItemId());
       if (registered != null) {
