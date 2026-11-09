@@ -73,4 +73,27 @@ class SupremeItemIdentityDoctorTest {
         new ItemStack(Material.IRON_INGOT), new ItemStack(Material.AIR));
     assertTrue(report.getFirst().contains("main hand"));
   }
+  @Test
+  void distinguishesChangedPersistentValuesEvenWhenIdKeysAndDisplayMatch() {
+    MockBukkit.mock();
+    ItemStack main = new ItemStack(Material.EMERALD);
+    ItemMeta mainMeta = main.getItemMeta();
+    NamespacedKey key = new NamespacedKey("slimefun", "slimefun_item");
+    mainMeta.getPersistentDataContainer().set(key, PersistentDataType.STRING, "SUPREME_ITEM_ONE");
+    main.setItemMeta(mainMeta);
+
+    ItemStack off = main.clone();
+    ItemMeta offMeta = off.getItemMeta();
+    offMeta.getPersistentDataContainer().set(key, PersistentDataType.STRING, "SUPREME_ITEM_TWO");
+    off.setItemMeta(offMeta);
+
+    List<String> report = SupremeItemIdentityDoctor.compare(main, off);
+    assertTrue(report.contains("PDC keys equal: true"));
+    assertTrue(report.contains("Adventure display name equal: true"));
+    assertTrue(report.contains("Bukkit stackable (ignoring quantity): false"));
+    assertTrue(report.stream().anyMatch(line ->
+        line.startsWith("Different serialized meta paths") && !line.endsWith("(none)")),
+        "persistent value changes must show up as an actionable meta path");
+  }
+
 }
