@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
+import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
@@ -132,10 +133,14 @@ class SupremeInventoryOutputIdentityTest {
 
     assertFalse(existing.isSimilar(generated),
         "the historical and generated Adventure components must remain distinct");
-    assertTrue(SupremeInventoryUtils.canFit(menu, new int[]{19, 20}, generated),
-        "a separate empty output slot must accept a nonmatching stack");
-    assertFalse(SupremeInventoryUtils.canFit(menu, new int[]{19}, generated),
-        "a full nonmatching stack must not be treated as available capacity");
+    try (var similarity = mockStatic(SlimefunUtils.class)) {
+      similarity.when(() -> SlimefunUtils.isItemSimilar(existing, generated, false, false))
+          .thenReturn(false);
+      assertTrue(SupremeInventoryUtils.canFit(menu, new int[]{19, 20}, generated),
+          "a separate empty output slot must accept a nonmatching stack");
+      assertFalse(SupremeInventoryUtils.canFit(menu, new int[]{19}, generated),
+          "a full nonmatching stack must not be treated as available capacity");
+    }
   }
 
 }
