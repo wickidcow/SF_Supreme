@@ -1,6 +1,7 @@
 package com.github.relativobr.supreme.machine.tech;
 
 import com.github.relativobr.supreme.Supreme;
+import com.github.relativobr.supreme.util.SupremeOutputStacks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -57,7 +58,7 @@ public final class SafeTechGenerator extends TechGenerator {
       correctedSlots++;
       overflowItems += remainder;
 
-      overflow.addAll(splitOverflow(current, remainder, legalMax));
+      overflow.addAll(SupremeOutputStacks.splitOverflow(current, remainder, legalMax));
     }
 
     if (overflow.isEmpty()) {
@@ -79,20 +80,6 @@ public final class SafeTechGenerator extends TechGenerator {
         "[TechGenerator] Repaired " + correctedSlots + " overstacked output slot(s) at "
             + block.getWorld().getName() + "@" + block.getX() + "," + block.getY() + "," + block.getZ()
             + "; preserved overflow=" + overflowItems + (dropped > 0 ? ", dropped=" + dropped : ""));
-  }
-
-  // Package-private for a metadata-preservation regression test. Never rebuild the
-  // Slimefun item: overflow must retain the exact original Adventure components and PDC.
-  static List<ItemStack> splitOverflow(ItemStack source, int remainder, int legalMax) {
-    List<ItemStack> splits = new ArrayList<>();
-    while (remainder > 0) {
-      int stackSize = Math.min(legalMax, remainder);
-      ItemStack split = source.clone();
-      split.setAmount(stackSize);
-      splits.add(split);
-      remainder -= stackSize;
-    }
-    return splits;
   }
 
   private static int legalStackSize(ItemStack item) {
