@@ -3,6 +3,7 @@ package com.github.relativobr.supreme.machine.tech;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
+import com.github.relativobr.supreme.util.SupremeOutputStacks;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -39,7 +40,7 @@ class SafeTechGeneratorOverflowIdentityTest {
     source.setItemMeta(meta);
     ItemStack before = source.clone();
 
-    List<ItemStack> split = SafeTechGenerator.splitOverflow(source, 70, 64);
+    List<ItemStack> split = SupremeOutputStacks.splitOverflow(source, 70, 64);
     assertEquals(2, split.size());
     assertEquals(64, split.get(0).getAmount());
     assertEquals(6, split.get(1).getAmount());
