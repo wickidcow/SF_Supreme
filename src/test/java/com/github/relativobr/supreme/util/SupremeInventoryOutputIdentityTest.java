@@ -144,4 +144,30 @@ class SupremeInventoryOutputIdentityTest {
   }
 
 
+  @Test
+  void canonicalBoldCarbonadoAndUnboldNestedOutputMustNotBeSilentlyMerged() {
+    MockBukkit.mock();
+    ItemStack canonical = new ItemStack(Material.DIAMOND);
+    ItemMeta canonicalMeta = canonical.getItemMeta();
+    canonicalMeta.displayName(Component.text("Carbonado", NamedTextColor.AQUA)
+        .decoration(net.kyori.adventure.text.format.TextDecoration.BOLD, true));
+    NamespacedKey id = new NamespacedKey("slimefun", "slimefun_item");
+    canonicalMeta.getPersistentDataContainer().set(id, PersistentDataType.STRING, "CARBONADO");
+    canonical.setItemMeta(canonicalMeta);
+
+    ItemStack divergent = canonical.clone();
+    ItemMeta divergentMeta = divergent.getItemMeta();
+    divergentMeta.displayName(Component.text("").append(
+        Component.text("Carbonado", NamedTextColor.AQUA)
+            .decoration(net.kyori.adventure.text.format.TextDecoration.BOLD, false)));
+    divergent.setItemMeta(divergentMeta);
+
+    assertEquals("CARBONADO", canonical.getItemMeta().getPersistentDataContainer()
+        .get(id, PersistentDataType.STRING));
+    assertEquals("CARBONADO", divergent.getItemMeta().getPersistentDataContainer()
+        .get(id, PersistentDataType.STRING));
+    assertFalse(canonical.isSimilar(divergent),
+        "matching Slimefun IDs do not override different Adventure item names");
+  }
+
 }
