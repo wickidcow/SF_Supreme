@@ -166,6 +166,35 @@ class HistoricalHeldItemRepairTest {
   }
 
   @Test
+  void unexpectedOffhandMutationCannotBeReportedAsSuccessfulRollback() {
+    MockBukkit.mock();
+    ItemStack old = legacy("CARBONADO", 17);
+    ItemStack fresh = fresh(old, "CARBONADO");
+    ItemStack changedOffhand = fresh.clone();
+    changedOffhand.setAmount(3);
+    AtomicReference<ItemStack> main = new AtomicReference<>(old);
+    AtomicReference<ItemStack> off = new AtomicReference<>(fresh);
+    PlayerInventory inventory = mock(PlayerInventory.class);
+    AtomicInteger writes = new AtomicInteger();
+    when(inventory.getItemInMainHand()).thenAnswer(call -> main.get());
+    when(inventory.getItemInOffHand()).thenAnswer(call -> off.get());
+    doAnswer(call -> {
+      main.set(((ItemStack) call.getArgument(0)).clone());
+      if (writes.getAndIncrement() == 0) off.set(changedOffhand);
+      return null;
+    }).when(inventory).setItemInMainHand(any(ItemStack.class));
+
+    var result = HistoricalHeldItemRepair.applyOne(inventory, fresh);
+    assertFalse(result.repaired());
+    assertTrue(result.reason().startsWith("CRITICAL:"), result.reason());
+    assertTrue(result.reason().contains("restore from backup"), result.reason());
+    assertEquals(2, writes.get(), "main-hand rollback must still be attempted");
+    assertEquals(old, main.get(), "main hand restored");
+    assertEquals(changedOffhand, off.get(), "unexpected offhand change must not be hidden");
+    verify(inventory, never()).setItemInOffHand(any());
+  }
+
+  @Test
   void changesBetweenSnapshotAndCommitAreRejectedWithoutWrite() {
     MockBukkit.mock();
     ItemStack old = legacy("SYNTHETIC_SAPPHIRE", 28);
