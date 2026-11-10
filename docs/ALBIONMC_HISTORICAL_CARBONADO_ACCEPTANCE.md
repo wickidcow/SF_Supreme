@@ -20,6 +20,7 @@ With fresh in MAIN / old in OFF, `/supreme doctor items preview` rejected the of
 
 - [ ] Start the test server normally and confirm no plugin startup, registration, recipe or saved-storage errors.
 - [ ] Withdraw **old** CARBONADO from a copied Fluffy barrel, keep it in **MAIN**. Put fresh `/sf cheat` CARBONADO in **OFF**. Record both amounts and full metadata. Check that old/new initially do **not** merge.
+- [ ] Run **read-only** `/supreme doctor items` with old MAIN / fresh OFF. Check the reported Slimefun IDs match, both reference comparisons identify the fresh OFF item as the current guide/cheat definition, and the registered guide/cheat and crafting outputs are stackable. The old MAIN item may be different. If the two registered outputs differ, **STOP** and investigate the registration discrepancy before repair; do not assume the generator caused it.
 - [ ] Run `/supreme doctor items preview`. Require exactly `READY: exact registered presentation on a detached clone.` Verify both items and the barrel counts remain unchanged. If not READY, **STOP**; do not force or bypass validation.
 - [ ] Test the reversed-hand arrangement separately on **unmodified copied stacks**: fresh MAIN / old OFF. It must reject and leave both unchanged.
 - [ ] On the correctly arranged copied pair, grant the temporary permission and run `/supreme doctor items repair confirm` **once**. Require an explicit success message. If rejected, stop and capture the reason. Do not repeatedly confirm blindly.
