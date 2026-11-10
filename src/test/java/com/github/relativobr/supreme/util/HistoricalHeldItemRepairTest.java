@@ -110,6 +110,36 @@ class HistoricalHeldItemRepairTest {
   }
 
   @Test
+  void thrownInventoryWriteTriggersVerifiedRollbackWithoutTouchingOffhand() {
+    MockBukkit.mock();
+    ItemStack old = legacy("CARBONADO", 23);
+    ItemStack fresh = fresh(old, "CARBONADO");
+    ItemStack original = old.clone();
+    AtomicReference<ItemStack> main = new AtomicReference<>(old);
+    AtomicReference<ItemStack> off = new AtomicReference<>(fresh);
+    PlayerInventory inventory = mock(PlayerInventory.class);
+    AtomicInteger writes = new AtomicInteger();
+    when(inventory.getItemInMainHand()).thenAnswer(call -> main.get());
+    when(inventory.getItemInOffHand()).thenAnswer(call -> off.get());
+    doAnswer(call -> {
+      if (writes.getAndIncrement() == 0) {
+        main.set(((ItemStack) call.getArgument(0)).clone());
+        throw new IllegalStateException("simulated inventory write failure");
+      }
+      main.set(((ItemStack) call.getArgument(0)).clone());
+      return null;
+    }).when(inventory).setItemInMainHand(any(ItemStack.class));
+
+    var result = HistoricalHeldItemRepair.applyOne(inventory, fresh);
+    assertFalse(result.repaired());
+    assertTrue(result.reason().contains("restored"), result.reason());
+    assertEquals(2, writes.get(), "failed write must be followed by one rollback");
+    assertEquals(original, main.get(), "rollback must restore the exact original stack");
+    assertEquals(fresh, off.get(), "offhand reference must remain untouched");
+    verify(inventory, never()).setItemInOffHand(any());
+  }
+
+  @Test
   void changesBetweenSnapshotAndCommitAreRejectedWithoutWrite() {
     MockBukkit.mock();
     ItemStack old = legacy("SYNTHETIC_SAPPHIRE", 28);
