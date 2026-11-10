@@ -155,7 +155,7 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
         HistoricalItemPresentationRepair.prepare(old, fresh, registered);
     send(sender, AQUA + "Historical Item Compatibility Preview (read-only)");
     send(sender, GRAY + candidate.reason());
-    send(sender, YELLOW + "No items modified. No repair command is enabled.");
+    send(sender, YELLOW + "No items modified. Repair requires separate permission and /supreme doctor items repair confirm.");
   }
 
   /**
