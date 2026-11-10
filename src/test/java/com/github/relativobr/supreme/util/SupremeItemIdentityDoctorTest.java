@@ -198,4 +198,62 @@ class SupremeItemIdentityDoctorTest {
         "persistent value changes must show up as an actionable meta path");
   }
 
+  @Test
+  void registeredSourceClassificationShowsOldVsNewWithoutRewritingAnything() {
+    MockBukkit.mock();
+    ItemStack oldMachine = new ItemStack(Material.PLAYER_HEAD, 12);
+    ItemMeta oldMeta = oldMachine.getItemMeta();
+    oldMeta.displayName(Component.text("").append(Component.text("Carbonado", NamedTextColor.AQUA)
+        .decoration(TextDecoration.BOLD, false)));
+    oldMeta.setCustomModelData(2200094);
+    oldMachine.setItemMeta(oldMeta);
+
+    ItemStack currentCheat = oldMachine.clone();
+    ItemMeta cheatMeta = currentCheat.getItemMeta();
+    cheatMeta.displayName(Component.text("Carbonado", NamedTextColor.AQUA)
+        .decoration(TextDecoration.BOLD, true));
+    currentCheat.setItemMeta(cheatMeta);
+    ItemStack currentCraft = currentCheat.clone();
+    currentCraft.setAmount(2);
+    ItemStack originalMachine = oldMachine.clone();
+    ItemStack originalCheat = currentCheat.clone();
+    ItemStack originalCraft = currentCraft.clone();
+
+    List<String> report = SupremeItemIdentityDoctor.compareRegistered(
+        oldMachine, currentCheat, currentCheat, currentCraft);
+    assertTrue(report.contains("Current registered guide/cheat vs crafting stackable: true"));
+    assertTrue(report.contains("Main matches current registered guide/cheat: false"));
+    assertTrue(report.contains("Main matches current registered crafting: false"));
+    assertTrue(report.contains("Off matches current registered guide/cheat: true"));
+    assertTrue(report.contains("Off matches current registered crafting: true"));
+    assertEquals(originalMachine, oldMachine);
+    assertEquals(originalCheat, currentCheat);
+    assertEquals(originalCraft, currentCraft);
+  }
+
+  @Test
+  void registrationMismatchIsReportedRatherThanSilentlyNormalizingItems() {
+    MockBukkit.mock();
+    ItemStack guideItem = new ItemStack(Material.PLAYER_HEAD, 1);
+    ItemMeta guideMeta = guideItem.getItemMeta();
+    guideMeta.displayName(Component.text("Carbonado", NamedTextColor.AQUA));
+    guideItem.setItemMeta(guideMeta);
+    ItemStack craftingItem = guideItem.clone();
+    ItemMeta craftMeta = craftingItem.getItemMeta();
+    craftMeta.displayName(Component.text("Carbonado", NamedTextColor.AQUA)
+        .decoration(TextDecoration.BOLD, true));
+    craftingItem.setItemMeta(craftMeta);
+
+    List<String> report = SupremeItemIdentityDoctor.compareRegistered(
+        craftingItem, guideItem, guideItem, craftingItem);
+    assertTrue(report.contains("Current registered guide/cheat vs crafting stackable: false"));
+    assertTrue(report.contains("Main matches current registered guide/cheat: false"));
+    assertTrue(report.contains("Main matches current registered crafting: true"));
+    assertTrue(report.contains("Off matches current registered guide/cheat: true"));
+    assertTrue(report.stream().anyMatch(s -> s.contains("Registry guide and crafting outputs differ")));
+    assertFalse(guideItem.isSimilar(craftingItem), "the doctor must not hide a real mismatch");
+    assertEquals("Carbonado", net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+        .plainText().serialize(guideItem.getItemMeta().displayName()));
+  }
+
 }
