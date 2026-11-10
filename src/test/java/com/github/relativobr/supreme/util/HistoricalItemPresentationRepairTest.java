@@ -59,6 +59,47 @@ class HistoricalItemPresentationRepairTest {
   }
 
   @Test
+  void historicalSyntheticEmeraldMatchesOwnerReportedOldNewPresentationShape() {
+    MockBukkit.mock();
+    ItemStack old = new ItemStack(Material.EMERALD, 64);
+    ItemMeta oldMeta = old.getItemMeta();
+    oldMeta.displayName(Component.text("").append(
+        Component.text("Synthetic Emerald", NamedTextColor.AQUA)
+            .decoration(TextDecoration.BOLD, false)
+            .decoration(TextDecoration.ITALIC, false)));
+    oldMeta.lore(List.of(
+        Component.text("Line 1", NamedTextColor.WHITE),
+        Component.text("Line 2", NamedTextColor.WHITE),
+        Component.text("Line 3", NamedTextColor.WHITE)));
+    oldMeta.getPersistentDataContainer().set(ID, PersistentDataType.STRING, "SYNTHETIC_EMERALD");
+    oldMeta.getPersistentDataContainer().set(OWNER, PersistentDataType.STRING, "keep");
+    old.setItemMeta(oldMeta);
+
+    ItemStack registered = old.clone();
+    registered.setAmount(1);
+    ItemMeta currentMeta = registered.getItemMeta();
+    currentMeta.displayName(Component.text("Synthetic Emerald", NamedTextColor.AQUA)
+        .decoration(TextDecoration.BOLD, TextDecoration.State.NOT_SET)
+        .decoration(TextDecoration.ITALIC, false));
+    registered.setItemMeta(currentMeta);
+    ItemStack fresh = registered.clone();
+    fresh.setAmount(32);
+    ItemStack beforeOld = old.clone(), beforeFresh = fresh.clone(), beforeRegistry = registered.clone();
+
+    assertFalse(old.isSimilar(fresh));
+    assertTrue(fresh.isSimilar(registered));
+    var result = HistoricalItemPresentationRepair.prepare(old, fresh, registered);
+    assertTrue(result.ready(), result.reason());
+    assertEquals(64, result.replacement().getAmount());
+    assertTrue(result.replacement().isSimilar(registered));
+    assertEquals("keep", result.replacement().getItemMeta().getPersistentDataContainer()
+        .get(OWNER, PersistentDataType.STRING));
+    assertEquals(beforeOld, old, "historical source must remain completely untouched");
+    assertEquals(beforeFresh, fresh, "fresh comparison stack must remain untouched");
+    assertEquals(beforeRegistry, registered, "registered template must remain untouched");
+  }
+
+  @Test
   void oldCarbonadoCanPrepareOnlyPresentationWhenFunctionalMetadataMatches() {
     MockBukkit.mock();
     ItemStack old = withIdentity("CARBONADO", "Carbonado", 2200094, 32);
