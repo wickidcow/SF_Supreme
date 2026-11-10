@@ -6,6 +6,7 @@ import com.github.relativobr.supreme.generic.machine.GenericMachine;
 import com.github.relativobr.supreme.generic.machine.SupremeMachineDiagnostics;
 import com.github.relativobr.supreme.util.SupremeRecipeDoctor;
 import com.github.relativobr.supreme.util.SupremeItemIdentityDoctor;
+import com.github.relativobr.supreme.util.HistoricalItemPresentationRepair;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.attributes.ProtectionType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
@@ -64,6 +65,8 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
           + DARK_GRAY + " - inspect worn Supreme armor effects and protection");
       send(sender, GRAY + "/" + label + " doctor items"
           + DARK_GRAY + " - compare main-hand output with an off-hand crafted item");
+      send(sender, GRAY + "/" + label + " doctor items preview"
+          + DARK_GRAY + " - check old MAIN vs new OFF without modifying either");
       return true;
     }
 
@@ -86,7 +89,13 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
         return true;
       }
       if (args[1].equalsIgnoreCase("items")) {
-        runItemIdentityDoctor(sender);
+        if (args.length == 2) {
+          runItemIdentityDoctor(sender);
+        } else if (args.length == 3 && args[2].equalsIgnoreCase("preview")) {
+          previewHistoricalItem(sender);
+        } else {
+          send(sender, RED + "Usage: /" + label + " doctor items [preview]");
+        }
         return true;
       }
       if (args[1].equalsIgnoreCase("machine")) {
@@ -123,6 +132,24 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
         player.getInventory().getItemInMainHand(), player.getInventory().getItemInOffHand())) {
       send(sender, GRAY + line);
     }
+  }
+
+  /** Reports whether one old stack can be reconciled without changing live items. */
+  private void previewHistoricalItem(CommandSender sender) {
+    if (!(sender instanceof Player player)) {
+      send(sender, RED + "Hold old item in MAIN and freshly crafted/cheat item in OFF.");
+      return;
+    }
+    ItemStack old = player.getInventory().getItemInMainHand();
+    ItemStack fresh = player.getInventory().getItemInOffHand();
+    String id = Slimefun.getItemDataService().getItemData(old).orElse(null);
+    SlimefunItem registration = id == null ? null : SlimefunItem.getById(id);
+    ItemStack registered = registration == null ? null : registration.getRecipeOutput();
+    HistoricalItemPresentationRepair.Candidate candidate =
+        HistoricalItemPresentationRepair.prepare(old, fresh, registered);
+    send(sender, AQUA + "Historical Item Compatibility Preview (read-only)");
+    send(sender, GRAY + candidate.reason());
+    send(sender, YELLOW + "No items modified. No repair command is enabled.");
   }
 
   private void runArmorDoctor(CommandSender sender) {
@@ -325,6 +352,9 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       addIfMatches(options, "soulbound", args[1]);
       addIfMatches(options, "armor", args[1]);
       addIfMatches(options, "items", args[1]);
+    } else if (args.length == 3 && args[0].equalsIgnoreCase("doctor")
+        && args[1].equalsIgnoreCase("items")) {
+      addIfMatches(options, "preview", args[2]);
     }
     return options;
   }
