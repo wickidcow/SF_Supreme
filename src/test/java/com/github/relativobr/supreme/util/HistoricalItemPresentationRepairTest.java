@@ -214,6 +214,25 @@ class HistoricalItemPresentationRepairTest {
   }
 
   @Test
+  void customFontInHistoricalLoreMustNeverBeFlattened() {
+    MockBukkit.mock();
+    ItemStack old = withIdentity("CARBONADO", "Carbonado", 2200094, 8);
+    ItemStack fresh = newer(old, "Carbonado");
+    ItemStack registered = fresh.clone();
+    registered.setAmount(1);
+    ItemMeta meta = old.getItemMeta();
+    meta.lore(List.of(Component.text("Ordinary lore", NamedTextColor.GRAY)
+        .font(NamespacedKey.minecraft("uniform"))));
+    old.setItemMeta(meta);
+    ItemStack original = old.clone();
+
+    var result = HistoricalItemPresentationRepair.prepare(old, fresh, registered);
+    assertFalse(result.ready(), "custom-font lore must not be silently normalized");
+    assertTrue(result.reason().contains("custom-font"), result.reason());
+    assertEquals(original, old);
+  }
+
+  @Test
   void nonPresentationItemFlagsAreNotSilentlyRemovedByHistoricalRepair() {
     MockBukkit.mock();
     ItemStack old = withIdentity("CARBONADO", "Carbonado", 2200094, 12);
