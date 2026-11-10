@@ -69,7 +69,7 @@ public final class HistoricalItemPresentationRepair {
       return skipped("Slimefun IDs differ: no repair.");
     }
     if (!reference.isSimilar(registered)) {
-      return skipped("Fresh reference does not match current registered item: no repair.");
+      return skipped("Fresh reference does not match current registered item: no repair. Check OLD in MAIN and fresh /sf cheat in OFF.");
     }
     if (historical.isSimilar(registered)) {
       return skipped("Old item already matches current item.");
