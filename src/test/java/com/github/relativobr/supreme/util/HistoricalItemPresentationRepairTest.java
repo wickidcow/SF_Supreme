@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
@@ -105,6 +107,31 @@ class HistoricalItemPresentationRepairTest {
     other.getPersistentDataContainer().set(COUNT, PersistentDataType.LONG, 100L);
     registered.setItemMeta(other);
     assertFalse(HistoricalItemPresentationRepair.prepare(another, fresh, registered).ready());
+  }
+
+  @Test
+  void interactiveOrInjectedPresentationNeverBecomesARepairCandidate() {
+    MockBukkit.mock();
+    ItemStack old = sapphire();
+    ItemStack fresh = newer(old, "Synthetic Sapphire");
+    ItemStack registered = fresh.clone();
+    ItemMeta meta = old.getItemMeta();
+    meta.displayName(meta.displayName().clickEvent(ClickEvent.runCommand("/private")));
+    old.setItemMeta(meta);
+    assertFalse(HistoricalItemPresentationRepair.prepare(old, fresh, registered).ready());
+
+    meta = old.getItemMeta();
+    meta.displayName(Component.text("").append(
+        Component.text("Synthetic Sapphire", NamedTextColor.AQUA)
+            .hoverEvent(HoverEvent.showText(Component.text("Hidden state")))));
+    old.setItemMeta(meta);
+    assertFalse(HistoricalItemPresentationRepair.prepare(old, fresh, registered).ready());
+
+    meta = old.getItemMeta();
+    meta.displayName(Component.text("").append(
+        Component.text("Synthetic Sapphire", NamedTextColor.AQUA).insertion("hidden-payload")));
+    old.setItemMeta(meta);
+    assertFalse(HistoricalItemPresentationRepair.prepare(old, fresh, registered).ready());
   }
 
   @Test
