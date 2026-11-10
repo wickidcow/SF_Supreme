@@ -60,7 +60,7 @@ public final class HistoricalItemPresentationRepair {
     }
 
     String id = itemId(oldMeta);
-    if (!SUPPORTED.contains(id)) {
+    if (id == null || !SUPPORTED.contains(id)) {
       return skipped("Only CARBONADO, SYNTHETIC_SAPPHIRE and SMALL_URANIUM are supported.");
     }
     if (!Objects.equals(id, itemId(freshMeta))
