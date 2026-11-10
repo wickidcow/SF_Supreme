@@ -10,6 +10,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -210,6 +211,25 @@ class HistoricalItemPresentationRepairTest {
         Component.text("Synthetic Sapphire", NamedTextColor.AQUA).insertion("hidden-payload")));
     old.setItemMeta(meta);
     assertFalse(HistoricalItemPresentationRepair.prepare(old, fresh, registered).ready());
+  }
+
+  @Test
+  void nonPresentationItemFlagsAreNotSilentlyRemovedByHistoricalRepair() {
+    MockBukkit.mock();
+    ItemStack old = withIdentity("CARBONADO", "Carbonado", 2200094, 12);
+    ItemStack fresh = newer(old, "Carbonado");
+    ItemStack registered = fresh.clone();
+    registered.setAmount(1);
+
+    ItemMeta meta = old.getItemMeta();
+    meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+    old.setItemMeta(meta);
+    ItemStack snapshot = old.clone();
+
+    var rejected = HistoricalItemPresentationRepair.prepare(old, fresh, registered);
+    assertFalse(rejected.ready(), "a different functional item flag is not presentation-only");
+    assertTrue(rejected.reason().contains("Non-presentation metadata differs"), rejected.reason());
+    assertEquals(snapshot, old, "rejection must leave historical item intact");
   }
 
   @Test
