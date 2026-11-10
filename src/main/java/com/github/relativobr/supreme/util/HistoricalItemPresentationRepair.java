@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -73,6 +74,14 @@ public final class HistoricalItemPresentationRepair {
     if (historical.isSimilar(registered)) {
       return skipped("Old item already matches current item.");
     }
+    if (hasSensitivePresentation(oldMeta.displayName())
+        || hasSensitivePresentation(freshMeta.displayName())
+        || hasSensitivePresentation(registeredMeta.displayName())
+        || hasSensitiveLore(oldMeta.lore())
+        || hasSensitiveLore(freshMeta.lore())
+        || hasSensitiveLore(registeredMeta.lore())) {
+      return skipped("Interactive, translated or custom-font presentation must not be overwritten.");
+    }
     if (!sameText(oldMeta.displayName(), registeredMeta.displayName())
         || !sameLoreText(oldMeta.lore(), registeredMeta.lore())) {
       return skipped("Visible item name/lore text differs; preserve custom or stateful text.");
@@ -99,6 +108,25 @@ public final class HistoricalItemPresentationRepair {
 
   private static String itemId(ItemMeta meta) {
     return meta.getPersistentDataContainer().get(SLIMEFUN_ID, PersistentDataType.STRING);
+  }
+
+  private static boolean hasSensitivePresentation(Component component) {
+    if (component == null) return false;
+    if (!(component instanceof TextComponent)
+        || component.clickEvent() != null || component.hoverEvent() != null
+        || component.insertion() != null || component.style().font() != null) return true;
+    for (Component child : component.children()) {
+      if (hasSensitivePresentation(child)) return true;
+    }
+    return false;
+  }
+
+  private static boolean hasSensitiveLore(List<Component> lore) {
+    if (lore == null) return false;
+    for (Component line : lore) {
+      if (hasSensitivePresentation(line)) return true;
+    }
+    return false;
   }
 
   private static boolean sameText(Component left, Component right) {
