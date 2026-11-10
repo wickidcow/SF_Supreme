@@ -100,6 +100,43 @@ class HistoricalItemPresentationRepairTest {
   }
 
   @Test
+  void smallUraniumHistoricalPreviewRequiresExactlyMatchingTypedData() {
+    MockBukkit.mock();
+    ItemStack old = new ItemStack(Material.PLAYER_HEAD, 17);
+    ItemMeta oldMeta = old.getItemMeta();
+    oldMeta.displayName(Component.text("").append(
+        Component.text("Small Chunk of Uranium", NamedTextColor.RED)
+            .decoration(TextDecoration.BOLD, false)));
+    oldMeta.lore(List.of(Component.text("Radioactive material", NamedTextColor.GRAY)));
+    oldMeta.getPersistentDataContainer().set(ID, PersistentDataType.STRING, "SMALL_URANIUM");
+    oldMeta.getPersistentDataContainer().set(COUNT, PersistentDataType.LONG, 100L);
+    old.setItemMeta(oldMeta);
+
+    ItemStack fresh = old.clone();
+    ItemMeta freshMeta = fresh.getItemMeta();
+    freshMeta.displayName(Component.text("Small Chunk of Uranium", NamedTextColor.RED));
+    fresh.setItemMeta(freshMeta);
+    ItemStack registered = fresh.clone();
+    registered.setAmount(1);
+    ItemStack sourceBefore = old.clone();
+
+    var accepted = HistoricalItemPresentationRepair.prepare(old, fresh, registered);
+    assertTrue(accepted.ready(), accepted.reason());
+    assertEquals(17, accepted.replacement().getAmount());
+    assertTrue(accepted.replacement().isSimilar(registered));
+    assertEquals(sourceBefore, old, "preview must not change historical uranium");
+
+    ItemMeta conflicting = old.getItemMeta();
+    conflicting.getPersistentDataContainer().remove(COUNT);
+    conflicting.getPersistentDataContainer().set(COUNT, PersistentDataType.STRING, "100");
+    old.setItemMeta(conflicting);
+    ItemStack badBefore = old.clone();
+    var rejected = HistoricalItemPresentationRepair.prepare(old, fresh, registered);
+    assertFalse(rejected.ready(), "same key and printable value with changed PDC TYPE must refuse");
+    assertEquals(badBefore, old, "rejected preview must preserve complete original");
+  }
+
+  @Test
   void oldCarbonadoCanPrepareOnlyPresentationWhenFunctionalMetadataMatches() {
     MockBukkit.mock();
     ItemStack old = withIdentity("CARBONADO", "Carbonado", 2200094, 32);
