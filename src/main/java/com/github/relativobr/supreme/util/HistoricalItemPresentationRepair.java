@@ -13,7 +13,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 /**
- * Explicit, single-held-stack repair preparation for three static Legacy core materials.
+ * Explicit, single-held-stack repair preparation for four explicitly allowlisted static Legacy core materials.
  *
  * <p>Never visits inventories, storage, barrel templates, item entities or historical records.
  * Only the caller may choose to install the independently cloned replacement. Functional
