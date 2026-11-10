@@ -56,6 +56,47 @@ class SupremeItemIdentityDoctorTest {
   }
 
   @Test
+  void realOwnerCarbonadoNestedGeneratorVersusFlatCheatBoldMismatchIsNotStackable() {
+    MockBukkit.mock();
+    ItemStack machine = new ItemStack(Material.PLAYER_HEAD, 64);
+    ItemMeta machineMeta = machine.getItemMeta();
+    machineMeta.displayName(Component.text("").append(
+        Component.text("Carbonado", NamedTextColor.AQUA)
+            .decoration(TextDecoration.BOLD, false)
+            .decoration(TextDecoration.ITALIC, false)
+            .decoration(TextDecoration.UNDERLINED, false)
+            .decoration(TextDecoration.STRIKETHROUGH, false)
+            .decoration(TextDecoration.OBFUSCATED, false)));
+    machineMeta.lore(List.of(Component.text("").append(
+        Component.text("Carbonado lore", NamedTextColor.GRAY)
+            .decoration(TextDecoration.ITALIC, false))));
+    machineMeta.setCustomModelData(2200094);
+    machineMeta.getPersistentDataContainer().set(
+        new NamespacedKey("slimefun", "slimefun_item"),
+        PersistentDataType.STRING, "CARBONADO");
+    machine.setItemMeta(machineMeta);
+
+    ItemStack cheat = machine.clone();
+    ItemMeta cheatMeta = cheat.getItemMeta();
+    cheatMeta.displayName(Component.text("Carbonado", NamedTextColor.AQUA)
+        .decoration(TextDecoration.ITALIC, false)
+        .decoration(TextDecoration.BOLD, true));
+    cheatMeta.lore(List.of(Component.text("Carbonado lore", NamedTextColor.GRAY)));
+    cheat.setItemMeta(cheatMeta);
+    ItemStack originalMachine = machine.clone();
+    ItemStack originalCheat = cheat.clone();
+
+    List<String> report = SupremeItemIdentityDoctor.compare(machine, cheat);
+    assertTrue(report.contains("Bukkit stackable (ignoring quantity): false"));
+    assertTrue(report.contains("Adventure display name equal: false"));
+    assertTrue(report.contains("Adventure lore equal: false"));
+    assertTrue(report.contains("PDC keys equal: true"));
+    assertTrue(report.contains("Non-presentation metadata equal (diagnostic clones): true"));
+    assertEquals(originalMachine, machine);
+    assertEquals(originalCheat, cheat);
+  }
+
+  @Test
   void identicalMetadataWithDifferentAmountsIsStackable() {
     MockBukkit.mock();
     ItemStack generated = new ItemStack(Material.IRON_INGOT, 2);
