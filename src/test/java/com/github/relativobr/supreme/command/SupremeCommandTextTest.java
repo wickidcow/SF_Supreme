@@ -44,7 +44,8 @@ class SupremeCommandTextTest {
         "\u00a77/supreme doctor retry\u00a78 - re-read a blocked machine checkpoint after repair",
         "\u00a77/supreme doctor soulbound\u00a78 - inspect Supreme gear held in your main hand",
         "\u00a77/supreme doctor armor\u00a78 - inspect worn Supreme armor effects and protection",
-        "\u00a77/supreme doctor items\u00a78 - compare main-hand output with an off-hand crafted item");
+        "\u00a77/supreme doctor items\u00a78 - compare main-hand output with an off-hand crafted item",
+        "\u00a77/supreme doctor items preview\u00a78 - check old MAIN vs new OFF without modifying either");
   }
 
   @Test
@@ -83,6 +84,24 @@ class SupremeCommandTextTest {
     when(sender.hasPermission("supreme.admin")).thenReturn(true);
     assertTrue(executor.onCommand(sender, command, "supreme", new String[] {"doctor", "items"}));
     assertMessages("\u00a7cHold a generator item in your main hand and a crafted/cheat item in your off hand.");
+    verifyNoInteractions(plugin);
+  }
+
+  @Test
+  void historicalPreviewOnConsoleDoesNotTouchInventoryOrPlugin() {
+    when(sender.hasPermission("supreme.admin")).thenReturn(true);
+    assertTrue(executor.onCommand(sender, command, "supreme",
+        new String[] {"doctor", "items", "preview"}));
+    assertMessages("\u00a7cHold old item in MAIN and freshly crafted/cheat item in OFF.");
+    verifyNoInteractions(plugin);
+  }
+
+  @Test
+  void historicalPreviewUnknownSubcommandDoesNotTouchAnything() {
+    when(sender.hasPermission("supreme.admin")).thenReturn(true);
+    assertTrue(executor.onCommand(sender, command, "supreme",
+        new String[] {"doctor", "items", "repair"}));
+    assertMessages("\u00a7cUsage: /supreme doctor items [preview]");
     verifyNoInteractions(plugin);
   }
 
