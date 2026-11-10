@@ -133,10 +133,31 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
       send(sender, RED + "Hold a generator item in your main hand and a crafted/cheat item in your off hand.");
       return;
     }
+    ItemStack main = player.getInventory().getItemInMainHand();
+    ItemStack off = player.getInventory().getItemInOffHand();
     send(sender, AQUA + "Supreme Item Identity Doctor (read-only)");
-    for (String line : SupremeItemIdentityDoctor.compare(
-        player.getInventory().getItemInMainHand(), player.getInventory().getItemInOffHand())) {
+    for (String line : SupremeItemIdentityDoctor.compare(main, off)) {
       send(sender, GRAY + line);
+    }
+
+    // Identify which source the historical or machine item actually resembles.
+    // Registry templates are cloned; no held item or persisted storage is edited.
+    String mainId = Slimefun.getItemDataService().getItemData(main).orElse(null);
+    String offId = Slimefun.getItemDataService().getItemData(off).orElse(null);
+    send(sender, GRAY + "Slimefun IDs MAIN=" + (mainId == null ? "(none)" : mainId)
+        + " | OFF=" + (offId == null ? "(none)" : offId));
+    if (mainId != null && mainId.equals(offId)) {
+      SlimefunItem registered = SlimefunItem.getById(mainId);
+      if (registered != null) {
+        for (String line : SupremeItemIdentityDoctor.compareRegistered(main, off,
+            registered.getItem().clone(), registered.getRecipeOutput())) {
+          send(sender, GRAY + line);
+        }
+      } else {
+        send(sender, GRAY + "No current Slimefun registration for these IDs.");
+      }
+    } else {
+      send(sender, GRAY + "Registry comparison requires matching Slimefun IDs in both hands.");
     }
   }
 
