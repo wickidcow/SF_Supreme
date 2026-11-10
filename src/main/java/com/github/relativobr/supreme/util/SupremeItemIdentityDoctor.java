@@ -70,6 +70,16 @@ public final class SupremeItemIdentityDoctor {
       lines.add("Off-only PDC keys: " + offOnly);
     }
 
+    // Compare independent clones after masking only Adventure name and lore.
+    // This does not rewrite either held item or relax Bukkit stacking rules.
+    // A TRUE result isolates the cause to presentation; a FALSE result means
+    // a non-presentation item component (PDC value/type, model, profile, etc.)
+    // is also different despite identical PDC key sets.
+    if (!mainHand.isSimilar(offHand)) {
+      lines.add("Non-presentation metadata equal (diagnostic clones): "
+          + sameWithoutPresentation(mainHand, offHand));
+    }
+
     List<String> changedPaths = new ArrayList<>();
     findDifferences(main.serialize(), off.serialize(), "meta", changedPaths);
     if (changedPaths.isEmpty() && !mainHand.isSimilar(offHand)) {
@@ -79,6 +89,23 @@ public final class SupremeItemIdentityDoctor {
           + (changedPaths.isEmpty() ? "(none)" : String.join(", ", changedPaths)));
     }
     return lines;
+  }
+
+  private static boolean sameWithoutPresentation(ItemStack originalMain, ItemStack originalOff) {
+    ItemStack main = originalMain.clone();
+    ItemStack off = originalOff.clone();
+    ItemMeta mainMeta = main.getItemMeta();
+    ItemMeta offMeta = off.getItemMeta();
+    if (mainMeta == null || offMeta == null) {
+      return false;
+    }
+    mainMeta.displayName(null);
+    offMeta.displayName(null);
+    mainMeta.lore(null);
+    offMeta.lore(null);
+    main.setItemMeta(mainMeta);
+    off.setItemMeta(offMeta);
+    return main.isSimilar(off);
   }
 
   private static void findDifferences(Map<?, ?> left, Map<?, ?> right, String path,
