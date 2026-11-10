@@ -18,6 +18,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -45,7 +46,8 @@ class SupremeCommandTextTest {
         "\u00a77/supreme doctor soulbound\u00a78 - inspect Supreme gear held in your main hand",
         "\u00a77/supreme doctor armor\u00a78 - inspect worn Supreme armor effects and protection",
         "\u00a77/supreme doctor items\u00a78 - compare main-hand output with an off-hand crafted item",
-        "\u00a77/supreme doctor items preview\u00a78 - check old MAIN vs new OFF without modifying either");
+        "\u00a77/supreme doctor items preview\u00a78 - check old MAIN vs new OFF without modifying either",
+        "\u00a77/supreme doctor items repair confirm\u00a78 - explicitly repair ONE held historical stack (extra permission)");
   }
 
   @Test
@@ -101,8 +103,42 @@ class SupremeCommandTextTest {
     when(sender.hasPermission("supreme.admin")).thenReturn(true);
     assertTrue(executor.onCommand(sender, command, "supreme",
         new String[] {"doctor", "items", "repair"}));
-    assertMessages("\u00a7cUsage: /supreme doctor items [preview]");
+    assertMessages("\u00a7cUsage: /supreme doctor items [preview|repair confirm]");
     verifyNoInteractions(plugin);
+  }
+
+  @Test
+  void repairWithoutExactConfirmIsNeverExecuted() {
+    when(sender.hasPermission("supreme.admin")).thenReturn(true);
+    assertTrue(executor.onCommand(sender, command, "supreme",
+        new String[] {"doctor", "items", "repair", "CONFIRM"}));
+    assertMessages("\u00a7cUsage: /supreme doctor items [preview|repair confirm]");
+    verifyNoInteractions(plugin);
+  }
+
+  @Test
+  void repairFromConsoleDoesNotInspectOrWritePlayerInventory() {
+    when(sender.hasPermission("supreme.admin")).thenReturn(true);
+    assertTrue(executor.onCommand(sender, command, "supreme",
+        new String[] {"doctor", "items", "repair", "confirm"}));
+    assertMessages("\u00a7cOnly a player can repair one held historical stack.");
+    verifyNoInteractions(plugin);
+  }
+
+  @Test
+  void historicalRepairPermissionIsDefaultDenyEvenForAdmins() {
+    Player player = mock(Player.class);
+    when(player.hasPermission("supreme.admin")).thenReturn(true);
+    assertTrue(executor.onCommand(player, command, "supreme",
+        new String[] {"doctor", "items", "repair", "confirm"}));
+    verify(player).hasPermission("supreme.doctor.items.repair");
+    verify(player).sendMessage(commandComponent(
+        "\u00a7cHistorical repair requires supreme.doctor.items.repair permission."));
+    verifyNoInteractions(plugin);
+  }
+
+  private static Component commandComponent(String value) {
+    return LegacyComponentSerializer.legacySection().deserialize(value);
   }
 
   @Test
@@ -145,6 +181,10 @@ class SupremeCommandTextTest {
     assertEquals(List.of("doctor"), executor.onTabComplete(sender, command, "supreme", new String[] {"DO"}));
     assertEquals(List.of("recipes", "retry"),
         executor.onTabComplete(sender, command, "supreme", new String[] {"DOCTOR", "RE"}));
+    assertEquals(List.of("preview", "repair"), executor.onTabComplete(sender, command, "supreme",
+        new String[] {"doctor", "items", ""}));
+    assertEquals(List.of("confirm"), executor.onTabComplete(sender, command, "supreme",
+        new String[] {"doctor", "items", "repair", "co"}));
     verifyNoInteractions(plugin);
   }
 
