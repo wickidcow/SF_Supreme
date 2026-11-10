@@ -7,6 +7,7 @@ import com.github.relativobr.supreme.generic.machine.SupremeMachineDiagnostics;
 import com.github.relativobr.supreme.util.SupremeRecipeDoctor;
 import com.github.relativobr.supreme.util.SupremeItemIdentityDoctor;
 import com.github.relativobr.supreme.util.HistoricalItemPresentationRepair;
+import com.github.relativobr.supreme.util.HistoricalHeldItemRepair;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.attributes.ProtectionType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
@@ -67,6 +68,8 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
           + DARK_GRAY + " - compare main-hand output with an off-hand crafted item");
       send(sender, GRAY + "/" + label + " doctor items preview"
           + DARK_GRAY + " - check old MAIN vs new OFF without modifying either");
+      send(sender, GRAY + "/" + label + " doctor items repair confirm"
+          + DARK_GRAY + " - explicitly repair ONE held historical stack (extra permission)");
       return true;
     }
 
@@ -93,8 +96,11 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
           runItemIdentityDoctor(sender);
         } else if (args.length == 3 && args[2].equalsIgnoreCase("preview")) {
           previewHistoricalItem(sender);
+        } else if (args.length == 4 && args[2].equalsIgnoreCase("repair")
+            && args[3].equals("confirm")) {
+          repairHistoricalHeldItem(sender);
         } else {
-          send(sender, RED + "Usage: /" + label + " doctor items [preview]");
+          send(sender, RED + "Usage: /" + label + " doctor items [preview|repair confirm]");
         }
         return true;
       }
@@ -150,6 +156,34 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
     send(sender, AQUA + "Historical Item Compatibility Preview (read-only)");
     send(sender, GRAY + candidate.reason());
     send(sender, YELLOW + "No items modified. No repair command is enabled.");
+  }
+
+  /**
+   * Explicit manual confirmation only. The preview result is never trusted as
+   * authorization: the candidate is rebuilt against current held items and
+   * registered metadata immediately before the single-slot commit.
+   */
+  private void repairHistoricalHeldItem(CommandSender sender) {
+    if (!(sender instanceof Player player)) {
+      send(sender, RED + "Only a player can repair one held historical stack.");
+      return;
+    }
+    if (!sender.hasPermission("supreme.doctor.items.repair")) {
+      send(sender, RED + "Historical repair requires supreme.doctor.items.repair permission.");
+      return;
+    }
+
+    ItemStack original = player.getInventory().getItemInMainHand();
+    String id = Slimefun.getItemDataService().getItemData(original).orElse(null);
+    SlimefunItem registration = id == null ? null : SlimefunItem.getById(id);
+    ItemStack registered = registration == null ? null : registration.getRecipeOutput();
+    HistoricalHeldItemRepair.Result result =
+        HistoricalHeldItemRepair.applyOne(player.getInventory(), registered);
+    send(sender, AQUA + "Historical Item Repair (one held stack, explicitly confirmed)");
+    send(sender, (result.repaired() ? GREEN : RED) + result.reason());
+    if (result.repaired()) {
+      send(sender, GRAY + "Offhand reference, other inventory slots and Fluffy barrels were not edited.");
+    }
   }
 
   private void runArmorDoctor(CommandSender sender) {
@@ -355,6 +389,10 @@ public final class SupremeCommand implements CommandExecutor, TabCompleter {
     } else if (args.length == 3 && args[0].equalsIgnoreCase("doctor")
         && args[1].equalsIgnoreCase("items")) {
       addIfMatches(options, "preview", args[2]);
+      addIfMatches(options, "repair", args[2]);
+    } else if (args.length == 4 && args[0].equalsIgnoreCase("doctor")
+        && args[1].equalsIgnoreCase("items") && args[2].equalsIgnoreCase("repair")) {
+      addIfMatches(options, "confirm", args[3]);
     }
     return options;
   }
