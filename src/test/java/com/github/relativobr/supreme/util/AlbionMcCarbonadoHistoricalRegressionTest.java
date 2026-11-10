@@ -89,7 +89,7 @@ class AlbionMcCarbonadoHistoricalRegressionTest {
 
     var preview = HistoricalItemPresentationRepair.prepare(cheatFresh, barrelOld, registered);
     assertFalse(preview.ready());
-    assertEquals("Fresh reference does not match current registered item: no repair.",
+    assertEquals("Fresh reference does not match current registered item: no repair. Check OLD in MAIN and fresh /sf cheat in OFF.",
         preview.reason());
     var confirmation = HistoricalHeldItemRepair.applyOne(inventory, registered);
     assertFalse(confirmation.repaired());
