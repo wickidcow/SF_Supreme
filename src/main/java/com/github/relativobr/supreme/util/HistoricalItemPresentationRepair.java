@@ -22,7 +22,7 @@ import org.bukkit.persistence.PersistentDataType;
  */
 public final class HistoricalItemPresentationRepair {
   private static final Set<String> SUPPORTED = Set.of(
-      "CARBONADO", "SYNTHETIC_SAPPHIRE", "SMALL_URANIUM");
+      "CARBONADO", "SYNTHETIC_SAPPHIRE", "SYNTHETIC_EMERALD", "SMALL_URANIUM");
   private static final NamespacedKey SLIMEFUN_ID =
       new NamespacedKey("slimefun", "slimefun_item");
   private static final PlainTextComponentSerializer PLAIN =
@@ -62,7 +62,7 @@ public final class HistoricalItemPresentationRepair {
 
     String id = itemId(oldMeta);
     if (id == null || !SUPPORTED.contains(id)) {
-      return skipped("Only CARBONADO, SYNTHETIC_SAPPHIRE and SMALL_URANIUM are supported.");
+      return skipped("Only CARBONADO, SYNTHETIC_SAPPHIRE, SYNTHETIC_EMERALD and SMALL_URANIUM are supported.");
     }
     if (!Objects.equals(id, itemId(freshMeta))
         || !Objects.equals(id, itemId(registeredMeta))) {
