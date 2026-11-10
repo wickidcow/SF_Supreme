@@ -140,6 +140,32 @@ class HistoricalHeldItemRepairTest {
   }
 
   @Test
+  void failedRollbackReportsCriticalWithoutClaimingRecovery() {
+    MockBukkit.mock();
+    ItemStack old = legacy("CARBONADO", 29);
+    ItemStack fresh = fresh(old, "CARBONADO");
+    AtomicReference<ItemStack> main = new AtomicReference<>(old);
+    AtomicReference<ItemStack> off = new AtomicReference<>(fresh);
+    PlayerInventory inventory = mock(PlayerInventory.class);
+    AtomicInteger writes = new AtomicInteger();
+    when(inventory.getItemInMainHand()).thenAnswer(call -> main.get());
+    when(inventory.getItemInOffHand()).thenAnswer(call -> off.get());
+    doAnswer(call -> {
+      writes.incrementAndGet();
+      throw new IllegalStateException("simulated permanent inventory write failure");
+    }).when(inventory).setItemInMainHand(any(ItemStack.class));
+
+    var result = HistoricalHeldItemRepair.applyOne(inventory, fresh);
+    assertFalse(result.repaired());
+    assertTrue(result.reason().startsWith("CRITICAL:"), result.reason());
+    assertTrue(result.reason().contains("restore from backup"), result.reason());
+    assertEquals(2, writes.get(), "rollback must be attempted even after first write throws");
+    assertEquals(old, main.get());
+    assertEquals(fresh, off.get());
+    verify(inventory, never()).setItemInOffHand(any());
+  }
+
+  @Test
   void changesBetweenSnapshotAndCommitAreRejectedWithoutWrite() {
     MockBukkit.mock();
     ItemStack old = legacy("SYNTHETIC_SAPPHIRE", 28);
