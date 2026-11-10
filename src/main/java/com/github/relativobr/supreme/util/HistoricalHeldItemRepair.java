@@ -54,23 +54,25 @@ public final class HistoricalHeldItemRepair {
         return new Result(true, "Repaired ONE held stack, preserving quantity and all functional metadata.");
       }
     } catch (RuntimeException | LinkageError ex) {
-      return rollback(inventory, original,
+      return rollback(inventory, original, originalReference,
           "A player-inventory write failed (" + ex.getClass().getSimpleName() + ").");
     }
 
-    return rollback(inventory, original, "Post-write verification failed.");
+    return rollback(inventory, original, originalReference, "Post-write verification failed.");
   }
 
-  private static Result rollback(PlayerInventory inventory, ItemStack original, String why) {
+  private static Result rollback(PlayerInventory inventory, ItemStack original,
+      ItemStack originalReference, String why) {
     try {
       inventory.setItemInMainHand(original.clone());
-      if (Objects.equals(inventory.getItemInMainHand(), original)) {
+      if (Objects.equals(inventory.getItemInMainHand(), original)
+          && Objects.equals(inventory.getItemInOffHand(), originalReference)) {
         return new Result(false, why + " Original main-hand stack restored.");
       }
     } catch (RuntimeException | LinkageError ignored) {
       // A failed rollback is explicitly reported. Never silently claim success.
     }
     return new Result(false, "CRITICAL: " + why
-        + " Original stack could not be verified after rollback; restore from backup.");
+        + " Original main/off-hand state could not be verified after rollback; restore from backup.");
   }
 }
