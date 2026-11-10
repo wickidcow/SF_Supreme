@@ -91,6 +91,36 @@ public final class SupremeItemIdentityDoctor {
     return lines;
   }
 
+  /**
+   * Read-only classification against the two current registered public output paths:
+   * guide /sf cheat clones getItem(), while normal crafting uses getRecipeOutput().
+   * A mismatch between those reference stacks is not evidence of a generator bug.
+   */
+  public static List<String> compareRegistered(ItemStack mainHand, ItemStack offHand,
+      ItemStack registeredCheat, ItemStack registeredCrafting) {
+    List<String> lines = new ArrayList<>();
+    if (mainHand == null || offHand == null
+        || registeredCheat == null || registeredCrafting == null
+        || mainHand.getType().isAir() || offHand.getType().isAir()) {
+      lines.add("Current registration comparison unavailable; no items modified.");
+      return lines;
+    }
+    boolean cheatCraftSame = registeredCheat.isSimilar(registeredCrafting);
+    lines.add("Current registered guide/cheat vs crafting stackable: " + cheatCraftSame);
+    lines.add("Main matches current registered guide/cheat: "
+        + mainHand.isSimilar(registeredCheat));
+    lines.add("Main matches current registered crafting: "
+        + mainHand.isSimilar(registeredCrafting));
+    lines.add("Off matches current registered guide/cheat: "
+        + offHand.isSimilar(registeredCheat));
+    lines.add("Off matches current registered crafting: "
+        + offHand.isSimilar(registeredCrafting));
+    if (!cheatCraftSame) {
+      lines.add("Registry guide and crafting outputs differ; inspect their definitions before repair.");
+    }
+    return lines;
+  }
+
   private static boolean sameWithoutPresentation(ItemStack originalMain, ItemStack originalOff) {
     ItemStack main = originalMain.clone();
     ItemStack off = originalOff.clone();
