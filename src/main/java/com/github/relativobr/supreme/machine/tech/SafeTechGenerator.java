@@ -1,6 +1,7 @@
 package com.github.relativobr.supreme.machine.tech;
 
 import com.github.relativobr.supreme.Supreme;
+import com.github.relativobr.supreme.util.SupremeOutputStacks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -57,13 +58,7 @@ public final class SafeTechGenerator extends TechGenerator {
       correctedSlots++;
       overflowItems += remainder;
 
-      while (remainder > 0) {
-        int stackSize = Math.min(legalMax, remainder);
-        ItemStack split = current.clone();
-        split.setAmount(stackSize);
-        overflow.add(split);
-        remainder -= stackSize;
-      }
+      overflow.addAll(SupremeOutputStacks.splitOverflow(current, remainder, legalMax));
     }
 
     if (overflow.isEmpty()) {
