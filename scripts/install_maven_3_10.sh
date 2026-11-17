@@ -8,9 +8,15 @@ MAVEN_SHA512=908b1501bfb420bf7c8affb855534a9c407fd6099367bfb9f2f2dcb8e9799102bff
 : "${GITHUB_PATH:?GitHub Actions PATH file is required}"
 
 archive="${RUNNER_TEMP}/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
-curl --fail --location --silent --show-error --retry 3 \
+# The live Apache mirror may rotate versions shortly after a newer Maven release.
+# Retain the exact pinned 3.10.0 binary and SHA-512 check; never silently upgrade.
+if ! curl --fail --location --silent --show-error --retry 3 \
   "https://downloads.apache.org/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz" \
-  --output "$archive"
+  --output "$archive"; then
+  curl --fail --location --silent --show-error --retry 3 \
+    "https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz" \
+    --output "$archive"
+fi
 printf '%s  %s\n' "$MAVEN_SHA512" "$archive" | sha512sum --check --status
 tar -xzf "$archive" -C "$RUNNER_TEMP"
 maven_bin="${RUNNER_TEMP}/apache-maven-${MAVEN_VERSION}/bin"
